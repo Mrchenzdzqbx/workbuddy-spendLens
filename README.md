@@ -13,6 +13,22 @@
 
 也可以直接使用仓库的 **Releases / Pages**（如已启用）。单文件 HTML 不依赖 CDN、框架或外部字体。
 
+## 界面预览
+
+以下截图来自脱敏演示版；会话标题和文件名字段已中性化，数值用于展示真实的数据结构。
+
+![首屏总览：Token 消费、订阅成本、官方 API 等价、额度使用率，以及 Token 热点图与每日模型堆叠图](docs/screenshots/01-overview.png)
+
+![钱去哪了：成本结构与七类动作的消耗排序](docs/screenshots/02-cost-breakdown.png)
+
+![省钱关键点：每条建议都带证据、估算金额和具体动作](docs/screenshots/03-savings.png)
+
+![模型顾问：单价反解与保守下沉/全量替换模拟](docs/screenshots/04-model-advisor.png)
+
+![价值地图：成本与可复用产出的四象限分布](docs/screenshots/05-value-map.png)
+
+![账本明细：按花费、请求、产出和评分查看每个会话](docs/screenshots/06-ledger.png)
+
 ## 它能回答什么
 
 - **实际用了多少**：Token、请求、积分、缓存命中、有效产出与失败调用。
