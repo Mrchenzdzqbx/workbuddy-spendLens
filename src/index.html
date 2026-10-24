@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>workbuddy-spendLens · 我帮你省钱</title>
+<meta name="description" content="本地解析 WorkBuddy 用量日志，算清钱花在哪个项目、哪类任务、哪个模型上，并给出可执行的下次用模型建议。数据不出本机。">
+<meta name="color-scheme" content="dark light">
+<style>/*__CSS__*/</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap hd">
+    <div class="brand">
+      <div class="logo">¥</div>
+      <div>
+        <h1>workbuddy-spendLens<span>我帮你省钱</span></h1>
+        <div class="tag">
+          <span id="srcBadge" class="live"><i></i><span id="srcText">等待接入</span></span>
+          <span class="dot"></span>
+          <span id="rangeText">—</span>
+        </div>
+      </div>
+    </div>
+    <div class="hd-right">
+      <div class="seg" id="winSeg">
+        <button class="pill" data-w="7">7 天</button>
+        <button class="pill" data-w="30">30 天</button>
+        <button class="pill" data-w="90">90 天</button>
+        <button class="pill on" data-w="all">全部</button>
+      </div>
+      <select id="wsSel" title="按项目筛选"><option value="">全部项目</option></select>
+      <select id="modelSel" title="按模型筛选"><option value="">全部模型</option></select>
+      <select id="planSel" title="计费口径：按积分牌价，或你的实际套餐"></select>
+      <button class="btn" id="themeBtn" type="button" title="切换明暗">◐</button>
+      <button class="btn" id="rescanBtn" type="button" title="重新扫描本地日志">⟳ 重扫</button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap app">
+
+  <section class="hero">
+    <div>
+      <div class="eyebrow" id="heroEyebrow" style="text-transform:none;letter-spacing:.08em">实际 Token 消费</div>
+      <div class="hero-big"><span id="heroMain">—</span></div>
+      <div class="hero-sub" id="heroSub">—</div>
+      <div class="savings" id="heroSave" style="display:none"></div>
+    </div>
+    <div class="mini-grid" id="miniGrid"></div>
+    <div class="hero-charts">
+      <div class="heat" id="heroHeat"></div>
+      <div class="daily" id="heroDaily"></div>
+    </div>
+  </section>
+
+  <div class="tabbar" id="tabBar" role="tablist">
+    <button class="tab on" data-tab="usage" role="tab">使用量 · 构成</button>
+    <button class="tab" data-tab="save" role="tab">省钱关键点 <i id="rxCount">0</i></button>
+    <button class="tab" data-tab="money" role="tab">钱去哪了</button>
+    <button class="tab" data-tab="value" role="tab">价值地图</button>
+    <button class="tab" data-tab="model" role="tab">模型顾问</button>
+    <button class="tab" data-tab="ledger" role="tab">账本明细</button>
+    <button class="tab" data-tab="method" role="tab">方法论</button>
+  </div>
+
+  <div class="panels" id="panels">
+
+    <div class="panel fade" id="panelUsage" role="tabpanel">
+      <div class="ph"><b>使用量 · 使用构成</b><span>每一项都由日志逐条聚合，不是估算</span></div>
+      <div class="kpis" id="kpis"></div>
+      <div class="insights" id="insights"></div>
+    </div>
+
+    <div class="panel" id="panelSave" role="tabpanel" hidden>
+      <div class="card">
+        <div class="ph"><b>省钱关键点</b><span>按「可省金额 × 证据强度」排序，每条都附证据与动作</span><span class="note" id="rxSummary"></span></div>
+        <div class="rx" id="rxList"></div>
+      </div>
+    </div>
+
+    <div class="panel" id="panelMoney" role="tabpanel" hidden>
+      <div class="ph"><b>钱去哪了</b><span>成本按「未命中输入 / 缓存读取 / 输出」三段拆解，再与模型、任务原型交叉定位</span></div>
+      <div class="card" id="costCard"></div>
+      <div class="card" id="sankeyCard"></div>
+      <div class="card" id="projectCard"></div>
+    </div>
+
+    <div class="panel" id="panelValue" role="tabpanel" hidden>
+      <div class="ph"><b>价值地图</b><span>横轴花了多少钱，纵轴落了多少字 —— 右上角是明星，右下角是黑洞</span></div>
+      <div class="card" id="mapCard"></div>
+      <div class="card" id="rankCard"></div>
+    </div>
+
+    <div class="panel" id="panelModel" role="tabpanel" hidden>
+      <div class="ph"><b>模型顾问</b><span>单价不是抄官网，是从你自己的账单里反解出来的</span></div>
+      <div class="card" id="priceCard"></div>
+      <div class="card" id="adviceCard"></div>
+      <div class="card" id="simCard"></div>
+    </div>
+
+    <div class="panel" id="panelLedger" role="tabpanel" hidden>
+      <div class="ph"><b>账本明细</b><span>点表头排序，点任意一行查看这个会话的完整证据链</span></div>
+      <div class="card" id="ledgerCard"></div>
+    </div>
+
+    <div class="panel" id="panelMethod" role="tabpanel" hidden>
+      <div class="ph"><b>方法论与边界</b><span>所有公式、口径、已知偏差都写在这里</span></div>
+      <div class="card" id="methodCard"></div>
+      <div class="foot" id="footNote"></div>
+    </div>
+
+  </div>
+</main>
+
+<div class="gate" id="gate"><div class="gate-in" id="gateIn"></div></div>
+<div class="drawer-bg" id="drawerBg"></div>
+<aside class="drawer" id="drawer" aria-live="polite"></aside>
+<div id="tip"></div>
+<div class="toast" id="toast"></div>
+<div id="fatal" style="display:none;position:fixed;left:12px;bottom:12px;z-index:400;max-width:min(560px,92vw);
+  background:rgba(30,10,16,.96);border:1px solid rgba(251,113,133,.4);border-radius:12px;padding:12px 14px;
+  color:#fecdd3;font:11px/1.7 ui-monospace,Consolas,monospace;white-space:pre-wrap;max-height:40vh;overflow:auto"></div>
+<script>
+(function(){
+  function show(t){
+    var f=document.getElementById('fatal');
+    if(!f) return;
+    f.style.display='block';
+    f.textContent += t + '\n';
+    if(!f._btn){
+      f._btn=1;
+      var b=document.createElement('button');
+      b.textContent=' ✕ '; b.style.cssText='position:absolute;top:6px;right:8px;background:none;border:0;color:#fda4af;cursor:pointer;font-size:13px';
+      b.onclick=function(){f.style.display='none';};
+      f.appendChild(b);
+    }
+  }
+  window.addEventListener('error',function(e){
+    show('[运行时错误] '+(e.message||'')+'\n  '+(e.filename||'').split('/').pop()+':'+(e.lineno||''));
+  });
+  window.addEventListener('unhandledrejection',function(e){
+    show('[Promise 未捕获] '+((e.reason&&e.reason.message)||e.reason));
+  });
+})();
+</script>
+
+<script>/*__CORE__*/</script>
+<script>/*__CHARTS__*/</script>
+<script>/*__UI__*/</script>
+<script>/*__BOOT__*/</script>
+</body>
+</html>

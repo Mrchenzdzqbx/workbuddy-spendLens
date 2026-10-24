@@ -1,0 +1,18 @@
+# Raw logs and local snapshots
+*.jsonl
+tools/raw.json
+tools/sensitive.txt
+
+# Local article drafts and validation artifacts
+article/
+*验收.png
+
+# OS / editor / runtime
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+__pycache__/
+*.pyc
+node_modules/
+.playwright-cli/
