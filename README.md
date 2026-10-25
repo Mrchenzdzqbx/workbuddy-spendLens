@@ -4,14 +4,18 @@
 
 > WorkBuddy「1024 造物挑战」参赛作品。非官方工具，不上传日志，不依赖后端服务。
 
-## 在线查看
+## 在线使用
 
-仓库内已包含可直接打开的单文件版本：
+- **在线演示（无需日志）**：[mrchenzdzqbx.github.io/workbuddy-spendLens/demo.html](https://mrchenzdzqbx.github.io/workbuddy-spendLens/demo.html)
+- **分析自己的日志**：[mrchenzdzqbx.github.io/workbuddy-spendLens/app.html](https://mrchenzdzqbx.github.io/workbuddy-spendLens/app.html)
+- **项目主页**：[mrchenzdzqbx.github.io/workbuddy-spendLens](https://mrchenzdzqbx.github.io/workbuddy-spendLens/)
+
+仓库内同时保留可直接下载的单文件版本：
 
 - `out/workbuddy-spendLens.html`：正式版，由你在本机选择或拖入 WorkBuddy 日志目录。
 - `out/workbuddy-spendLens-脱敏演示版.html`：内嵌脱敏演示数据，双击即可查看，无需读取任何本机日志。
 
-也可以直接使用仓库的 **Releases / Pages**（如已启用）。单文件 HTML 不依赖 CDN、框架或外部字体。
+单文件 HTML 不依赖 CDN、框架或外部字体。
 
 ## 界面预览
 
@@ -151,11 +155,33 @@ node test/edge.js
 
 构建产物写入 `out/`。没有日志或不想读取日志时，直接使用仓库中已有的两个 HTML 即可。
 
+## 发布 GitHub Pages
+
+站点位于 `docs/`，通过 `main` 分支的 `/docs` 目录发布：
+
+- `docs/index.html`：项目主页
+- `docs/demo.html`：在线演示版
+- `docs/app.html`：读取本机日志的正式版
+- `docs/screenshots/`：界面截图
+
+更新 `out/` 后同步到站点目录并提交：
+
+```bash
+cp out/workbuddy-spendLens.html docs/app.html
+cp out/workbuddy-spendLens-脱敏演示版.html docs/demo.html
+git add docs
+git commit -m "Update Pages build"
+git push
+```
+
+GitHub 仓库设置中保持 **Pages → Build and deployment → Source: Deploy from a branch**，分支选 `main`、目录选 `/docs`。`docs/.nojekyll` 已关闭 Jekyll 处理，静态文件会原样发布。
+
 ## 目录
 
 ```text
 src/                 页面、样式、聚合、图表与交互
 out/                 可直接打开的单文件正式版与脱敏演示版
+docs/                GitHub Pages 站点（主页、两个入口、截图）
 test/                本机对账和边界测试
 tools/dump.js        将本机日志转为本地临时快照（输出不入库）
 build.py             单文件打包、结构脱敏与隐私校验

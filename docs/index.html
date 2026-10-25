@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>workbuddy-spendLens · 我帮你省钱</title>
+<meta name="description" content="把 WorkBuddy 请求级用量日志拆成套餐成本、Token 构成、模型消耗与可执行建议。数据只在本机浏览器解析，不上传。">
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" content="#08111f">
+<meta name="robots" content="index,follow">
+<link rel="canonical" href="https://mrchenzdzqbx.github.io/workbuddy-spendLens/">
+<meta property="og:type" content="website">
+<meta property="og:title" content="workbuddy-spendLens · 我帮你省钱">
+<meta property="og:description" content="把 AI 账单变成行动清单。套餐成本、官方 API 等价、模型建议与可省钱处方，全部在本机解析。">
+<meta property="og:url" content="https://mrchenzdzqbx.github.io/workbuddy-spendLens/">
+<meta property="og:image" content="https://mrchenzdzqbx.github.io/workbuddy-spendLens/screenshots/01-overview.png">
+<meta name="twitter:card" content="summary_large_image">
+<style>
+:root{
+  --bg:#07101d;
+  --bg-2:#0a1728;
+  --panel:rgba(13,30,49,.66);
+  --line:rgba(164,205,226,.17);
+  --line-strong:rgba(164,205,226,.3);
+  --text:#e8f3f8;
+  --muted:#9bb2c4;
+  --muted-2:#6f8ca1;
+  --mint:#74e6d4;
+  --mint-strong:#31c9b4;
+  --amber:#ffc06b;
+  --shadow:0 30px 90px rgba(0,0,0,.38);
+  --radius:24px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;
+  min-height:100dvh;
+  color:var(--text);
+  background:
+    radial-gradient(900px 560px at 14% 0%,rgba(49,201,180,.16),transparent 64%),
+    radial-gradient(760px 520px at 88% 14%,rgba(94,138,255,.13),transparent 62%),
+    linear-gradient(180deg,var(--bg) 0%,var(--bg-2) 58%,#07111f 100%);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei","PingFang SC",sans-serif;
+  line-height:1.65;
+  -webkit-font-smoothing:antialiased;
+}
+a{color:inherit}
+.skip{
+  position:absolute;left:16px;top:-80px;z-index:20;
+  padding:10px 14px;border-radius:10px;background:var(--mint);color:#06211d;
+  font-weight:700;text-decoration:none;transition:top .2s ease;
+}
+.skip:focus{top:16px}
+.shell{width:min(1180px,calc(100% - 40px));margin:0 auto}
+.site-header{
+  display:flex;align-items:center;justify-content:space-between;gap:24px;
+  padding:26px 0;border-bottom:1px solid var(--line);
+}
+.brand{
+  display:flex;align-items:center;gap:12px;text-decoration:none;
+  font-size:16px;font-weight:800;letter-spacing:-.02em;
+}
+.brand-mark{
+  display:grid;place-items:center;width:38px;height:38px;border-radius:12px;
+  color:#05201c;background:linear-gradient(145deg,var(--mint),#b7fff2);
+  box-shadow:0 8px 30px rgba(49,201,180,.22);
+}
+.brand small{
+  display:block;color:var(--muted);font-size:11px;font-weight:500;
+  letter-spacing:.12em;margin-top:1px;
+}
+.header-link{
+  color:var(--muted);text-decoration:none;font-size:13px;
+  border:1px solid var(--line);border-radius:999px;padding:8px 14px;
+  transition:border-color .2s ease,color .2s ease,background .2s ease;
+}
+.header-link:hover{color:var(--text);border-color:var(--line-strong);background:rgba(255,255,255,.04)}
+.hero{
+  display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.25fr);
+  gap:54px;align-items:center;padding:74px 0 52px;
+}
+.eyebrow{
+  display:inline-flex;align-items:center;gap:8px;
+  color:var(--mint);font-size:11px;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;margin-bottom:18px;
+}
+.eyebrow::before{
+  content:"";width:22px;height:1px;background:var(--mint);opacity:.7;
+}
+h1{
+  margin:0;font-size:clamp(38px,5.2vw,68px);line-height:1.08;
+  letter-spacing:-.055em;font-weight:850;
+}
+h1 em{
+  font-style:normal;
+  background:linear-gradient(100deg,var(--mint) 8%,#a9fff1 46%,var(--amber) 110%);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+}
+.lede{
+  max-width:540px;margin:24px 0 0;color:var(--muted);
+  font-size:clamp(15px,1.5vw,17px);
+}
+.actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:30px}
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:9px;
+  min-height:48px;padding:0 21px;border-radius:14px;
+  font-size:14px;font-weight:750;text-decoration:none;
+  transition:transform .18s ease,background .18s ease,border-color .18s ease,box-shadow .18s ease;
+}
+.btn:hover{transform:translateY(-2px)}
+.btn:focus-visible,.header-link:focus-visible,.brand:focus-visible,footer a:focus-visible{
+  outline:3px solid var(--amber);outline-offset:4px;
+}
+.btn-primary{
+  color:#05211d;background:linear-gradient(145deg,var(--mint),#a9fff1);
+  box-shadow:0 10px 36px rgba(49,201,180,.22);
+}
+.btn-primary:hover{box-shadow:0 14px 42px rgba(49,201,180,.3)}
+.btn-secondary{
+  color:var(--text);border:1px solid var(--line-strong);
+  background:rgba(255,255,255,.035);
+}
+.btn-secondary:hover{background:rgba(255,255,255,.07)}
+.privacy-line{
+  display:flex;align-items:flex-start;gap:8px;
+  margin:18px 0 0;color:var(--muted-2);font-size:12px;
+}
+.privacy-line svg{flex:0 0 auto;margin-top:2px;color:var(--mint)}
+.shot-wrap{
+  position:relative;
+  border:1px solid var(--line-strong);
+  border-radius:20px;padding:8px;
+  background:rgba(255,255,255,.045);
+  box-shadow:var(--shadow);
+}
+.shot-wrap::after{
+  content:"";position:absolute;inset:8px;pointer-events:none;
+  border-radius:13px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08);
+}
+.shot-wrap img{
+  display:block;width:100%;height:auto;border-radius:13px;
+}
+.shot-caption{
+  display:flex;justify-content:space-between;gap:16px;
+  margin:11px 4px 0;color:var(--muted-2);font-size:11px;
+}
+.shot-caption span:last-child{color:var(--mint)}
+.features{
+  border-top:1px solid var(--line);
+  padding:52px 0 22px;
+}
+.section-heading{
+  display:flex;align-items:flex-end;justify-content:space-between;
+  gap:24px;margin-bottom:24px;
+}
+.section-heading h2{
+  margin:0;font-size:clamp(22px,3vw,30px);line-height:1.2;letter-spacing:-.035em;
+}
+.section-heading p{margin:0;color:var(--muted-2);font-size:12px;max-width:420px;text-align:right}
+.cards{
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:14px;
+}
+.card{
+  min-width:0;padding:22px;
+  border:1px solid var(--line);border-radius:18px;
+  background:linear-gradient(160deg,rgba(255,255,255,.045),rgba(255,255,255,.018));
+}
+.card-index{
+  display:inline-block;color:var(--mint);font:700 11px/1.2 ui-monospace,Consolas,monospace;
+  letter-spacing:.08em;margin-bottom:20px;
+}
+.card h3{margin:0 0 8px;font-size:16px;letter-spacing:-.015em}
+.card p{margin:0;color:var(--muted);font-size:13px}
+.how{
+  display:grid;grid-template-columns:1fr 1fr;gap:14px;
+  padding:26px 0 58px;
+}
+.steps{
+  padding:24px;border:1px solid var(--line);border-radius:20px;background:var(--panel);
+}
+.steps h2{margin:0 0 16px;font-size:18px}
+.steps ol{margin:0;padding-left:20px;color:var(--muted);font-size:13px}
+.steps li+li{margin-top:8px}
+.steps strong{color:var(--text)}
+.links{
+  display:flex;flex-direction:column;justify-content:space-between;
+  padding:24px;border:1px solid var(--line);border-radius:20px;
+  background:
+    radial-gradient(360px 180px at 80% 0%,rgba(49,201,180,.1),transparent 70%),
+    var(--panel);
+}
+.links h2{margin:0 0 10px;font-size:18px}
+.links p{margin:0;color:var(--muted);font-size:13px;max-width:390px}
+.link-row{display:flex;flex-wrap:wrap;gap:16px;margin-top:24px}
+.link-row a{
+  color:var(--mint);font-size:13px;text-decoration:none;
+  border-bottom:1px solid rgba(116,230,212,.35);padding-bottom:2px;
+}
+.link-row a:hover{border-bottom-color:var(--mint)}
+footer{
+  display:flex;align-items:center;justify-content:space-between;gap:20px;
+  padding:22px 0 34px;border-top:1px solid var(--line);
+  color:var(--muted-2);font-size:11px;
+}
+footer a{color:var(--muted);text-decoration:none}
+footer a:hover{color:var(--text)}
+@media (max-width:900px){
+  .hero{grid-template-columns:1fr;gap:34px;padding-top:48px}
+  .lede{max-width:680px}
+  .cards{grid-template-columns:1fr}
+  .section-heading{align-items:flex-start;flex-direction:column;gap:8px}
+  .section-heading p{text-align:left}
+}
+@media (max-width:620px){
+  .shell{width:min(100% - 28px,1180px)}
+  .site-header{padding:18px 0}
+  .brand{font-size:14px}
+  .brand-mark{width:34px;height:34px;border-radius:10px}
+  .header-link{padding:7px 11px;font-size:12px}
+  .hero{padding:40px 0 38px}
+  h1{font-size:clamp(36px,12vw,52px)}
+  .actions{display:grid;grid-template-columns:1fr}
+  .btn{width:100%}
+  .shot-caption{display:block}
+  .shot-caption span{display:block}
+  .shot-caption span+span{margin-top:3px}
+  .how{grid-template-columns:1fr}
+  footer{align-items:flex-start;flex-direction:column;gap:8px}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{transition-duration:.01ms!important}
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">跳到主要内容</a>
+
+<header class="shell site-header">
+  <a class="brand" href="./" aria-label="workbuddy-spendLens 首页">
+    <span class="brand-mark" aria-hidden="true">¥</span>
+    <span>workbuddy-spendLens<small>我帮你省钱</small></span>
+  </a>
+  <a class="header-link" href="https://github.com/Mrchenzdzqbx/workbuddy-spendLens">GitHub 源码</a>
+</header>
+
+<main id="main" class="shell">
+  <section class="hero" aria-labelledby="hero-title">
+    <div>
+      <div class="eyebrow">Local-first cost analytics</div>
+      <h1 id="hero-title">把 AI 账单<br><em>变成行动清单</em></h1>
+      <p class="lede">
+        读 WorkBuddy 的请求级日志，算清套餐成本、官方 API 等价、Token 构成与模型消耗。
+        不是再给你一张报表，而是告诉你下次该改哪个动作。
+      </p>
+      <div class="actions">
+        <a class="btn btn-primary" href="./demo.html">打开在线演示 <span aria-hidden="true">→</span></a>
+        <a class="btn btn-secondary" href="./app.html">分析我的日志</a>
+      </div>
+      <p class="privacy-line">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3l7 3v5c0 4.4-2.9 8.4-7 10-4.1-1.6-7-5.6-7-10V6l7-3z" stroke="currentColor" stroke-width="1.7"/><path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        日志只在浏览器本地解析，不上传；正式版首次需手动授权日志目录。
+      </p>
+    </div>
+
+    <div>
+      <div class="shot-wrap">
+        <img src="screenshots/01-overview.png" width="1525" height="1052" alt="workbuddy-spendLens 首屏：Token 消费、成本卡片、Token 热点图和每日模型堆叠图" fetchpriority="high" decoding="async">
+      </div>
+      <div class="shot-caption">
+        <span>界面来自脱敏演示数据，会话与文件名已中性化。</span>
+        <span>单文件 · 零依赖 · 可离线</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="features" aria-labelledby="features-title">
+    <div class="section-heading">
+      <h2 id="features-title">不只看花了多少，还看为什么</h2>
+      <p>成本、交付、模型与证据放在同一页，结论可以一路下钻复核。</p>
+    </div>
+    <div class="cards">
+      <article class="card">
+        <span class="card-index">01 / COST</span>
+        <h3>四套成本口径分开算</h3>
+        <p>套餐期间实付、官方 API 等价、WorkBuddy 省下和优化空间各自独立，不把事实与估算加在一起。</p>
+      </article>
+      <article class="card">
+        <span class="card-index">02 / ATTRIBUTION</span>
+        <h3>从项目追到单个请求</h3>
+        <p>按项目、会话、任务原型、模型和工具拆解，再用账本明细回到原始证据，避免只看总数。</p>
+      </article>
+      <article class="card">
+        <span class="card-index">03 / ACTION</span>
+        <h3>建议带门槛与边界</h3>
+        <p>模型下沉要求足够的同任务样本；优势不足就保持现状。所有估算都标注口径和已知误差。</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="how" aria-label="开始使用">
+    <div class="steps">
+      <h2>三步开始</h2>
+      <ol>
+        <li><strong>先看演示</strong>：无需日志，打开即可浏览 7 个页签。</li>
+        <li><strong>再看自己的账单</strong>：正式版选择或拖入 <code>~/.workbuddy/projects</code>。</li>
+        <li><strong>从一条动作开始</strong>：先做证据最充分、改动最小的建议。</li>
+      </ol>
+    </div>
+    <div class="links">
+      <div>
+        <h2>源码、说明与复现</h2>
+        <p>公式、计费口径、脱敏机制与已知边界都在仓库 README 中。项目为 WorkBuddy「1024 造物挑战」参赛作品，非官方工具。</p>
+      </div>
+      <div class="link-row">
+        <a href="https://github.com/Mrchenzdzqbx/workbuddy-spendLens">GitHub 仓库</a>
+        <a href="https://github.com/Mrchenzdzqbx/workbuddy-spendLens#readme">README</a>
+        <a href="https://github.com/Mrchenzdzqbx/workbuddy-spendLens/tree/main/docs/screenshots">界面截图</a>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span>workbuddy-spendLens · 数据留在本机</span>
+    <span>Built as a single-file, offline-first web app.</span>
+  </footer>
+</main>
+</body>
+</html>

@@ -1,0 +1,3974 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>workbuddy-spendLens · 我帮你省钱</title>
+<meta name="description" content="本地解析 WorkBuddy 用量日志，算清钱花在哪个项目、哪类任务、哪个模型上，并给出可执行的下次用模型建议。数据不出本机。">
+<meta name="color-scheme" content="dark light">
+<style>/* ============================================================
+   SpendLens — 设计系统
+   深色为默认，.light 覆盖为浅色；所有颜色走 CSS 变量
+   ============================================================ */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#05070b; --bg-soft:#080b12;
+  --card:rgba(16,21,31,.74); --card2:rgba(22,28,40,.6); --solid:#0d121b;
+  --line:rgba(148,163,184,.12); --line2:rgba(148,163,184,.22); --hi:rgba(255,255,255,.07);
+  --t1:#e9eff8; --t2:#9dabc0; --t3:#68768b; --t4:#4a5666;
+  --teal:#2dd4bf; --cyan:#38bdf8; --violet:#a78bfa; --rose:#fb7185; --amber:#fbbf24; --green:#34d399; --orange:#fb923c;
+  --teal-d:rgba(45,212,191,.12); --rose-d:rgba(251,113,133,.12); --amber-d:rgba(251,191,36,.12); --violet-d:rgba(167,139,250,.12);
+  --glow:rgba(45,212,191,.10);
+  --shadow:0 20px 50px -30px rgba(0,0,0,.9);
+  --tt-bg:rgba(8,12,18,.96); --tt-bd:rgba(148,163,184,.24);
+  --m0:#2dd4bf; --m1:#a78bfa; --m2:#fb923c; --m3:#38bdf8; --m4:#fbbf24; --m5:#fb7185; --m6:#34d399; --m7:#94a3b8;
+  color-scheme:dark;
+}
+body.light{
+  --bg:#f4f6fa; --bg-soft:#eef1f6;
+  --card:rgba(255,255,255,.86); --card2:rgba(255,255,255,.6); --solid:#fff;
+  --line:rgba(16,38,66,.10); --line2:rgba(16,38,66,.18); --hi:rgba(255,255,255,.9);
+  --t1:#0b1725; --t2:#465c76; --t3:#6d8098; --t4:#94a5b7;
+  --teal:#0d9488; --cyan:#0284c7; --violet:#7c3aed; --rose:#e11d48; --amber:#b45309; --green:#059669; --orange:#ea580c;
+  --teal-d:rgba(13,148,136,.10); --rose-d:rgba(225,29,72,.09); --amber-d:rgba(180,83,9,.10); --violet-d:rgba(124,58,237,.09);
+  --glow:rgba(13,148,136,.10);
+  --shadow:0 20px 44px -32px rgba(16,38,66,.34);
+  --tt-bg:rgba(11,23,37,.96); --tt-bd:rgba(255,255,255,.16);
+  --m0:#0d9488; --m1:#7c3aed; --m2:#ea580c; --m3:#0369a1; --m4:#b45309; --m5:#e11d48; --m6:#059669; --m7:#64748b;
+  color-scheme:light;
+}
+html{scroll-behavior:smooth}
+body{
+  font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  background:var(--bg); color:var(--t1); font-size:13px; line-height:1.6;
+  -webkit-font-smoothing:antialiased; transition:background .3s,color .3s;
+  padding:0 0 60px;
+}
+body::before{
+  content:""; position:fixed; inset:0; z-index:-1; pointer-events:none;
+  background:
+    radial-gradient(900px 500px at 8% -8%, var(--glow), transparent 62%),
+    radial-gradient(700px 460px at 92% -4%, rgba(167,139,250,.09), transparent 62%),
+    radial-gradient(1100px 700px at 50% 108%, rgba(56,189,248,.06), transparent 60%);
+}
+.num,td,th,.kpi b,.hero-big,.mono{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+.mono{font-family:ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-thumb{background:var(--line2);border-radius:9px}
+::-webkit-scrollbar-thumb:hover{background:var(--t4)}
+::-webkit-scrollbar-track{background:transparent}
+a{color:var(--teal);text-decoration:none}
+button{font-family:inherit}
+
+/* ---------- 骨架 ---------- */
+.wrap{max-width:1460px;margin:0 auto;padding:0 26px}
+header{position:sticky;top:0;z-index:40;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+  background:linear-gradient(180deg,var(--bg) 20%,color-mix(in srgb,var(--bg) 78%,transparent));
+  border-bottom:1px solid var(--line);}
+.hd{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 0;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:12px;min-width:0}
+.logo{width:38px;height:38px;flex:none;border-radius:11px;display:grid;place-items:center;
+  background:linear-gradient(135deg,var(--teal),var(--cyan) 60%,var(--violet));
+  box-shadow:0 10px 26px -12px var(--teal),0 0 0 1px var(--hi) inset;color:#04181a;font-weight:800;font-size:17px}
+body.light .logo{color:#fff}
+.brand h1{font-size:16px;font-weight:660;letter-spacing:-.01em;line-height:1.2;white-space:nowrap}
+.brand h1 span{color:var(--t3);font-weight:400;font-size:11.5px;letter-spacing:.14em;margin-left:8px;text-transform:uppercase}
+.brand .tag{font-size:10.5px;color:var(--t3);margin-top:2px;display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+.hd-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+
+/* ---------- 控件 ---------- */
+.seg{display:inline-flex;gap:2px;padding:3px;border:1px solid var(--line);border-radius:10px;background:var(--card2)}
+.pill{border:0;background:transparent;color:var(--t2);font-size:11.5px;padding:5px 11px;border-radius:7px;cursor:pointer;transition:.16s;white-space:nowrap}
+.pill:hover{color:var(--t1)}
+.pill.on{background:var(--teal-d);color:var(--teal);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--teal) 35%,transparent)}
+.btn{border:1px solid var(--line);background:var(--card2);color:var(--t2);font-size:11.5px;padding:7px 12px;border-radius:9px;
+  cursor:pointer;transition:.16s;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--line2);color:var(--t1);background:var(--card)}
+.btn.pri{background:linear-gradient(135deg,var(--teal),var(--cyan));color:#04181a;border:0;font-weight:600}
+body.light .btn.pri{color:#fff}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.chip{border:1px solid var(--line);background:transparent;color:var(--t2);font-size:11px;padding:4px 9px;border-radius:7px;cursor:pointer;transition:.15s}
+.chip:hover{color:var(--t1);border-color:var(--line2)}
+.chip.on{background:var(--teal-d);color:var(--teal);border-color:color-mix(in srgb,var(--teal) 32%,transparent)}
+input[type=date],input[type=search],select{
+  border:1px solid var(--line);background:var(--card2);color:var(--t2);font-size:11.5px;padding:6px 9px;border-radius:8px;
+  outline:none;transition:.15s;font-family:inherit}
+input[type=date]:focus,input[type=search]:focus,select:focus{border-color:color-mix(in srgb,var(--teal) 40%,transparent)}
+input[type=search]{min-width:150px}
+.live{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;color:var(--teal);border:1px solid color-mix(in srgb,var(--teal) 34%,transparent);
+  background:var(--teal-d);padding:5px 9px;border-radius:999px;letter-spacing:.04em;white-space:nowrap}
+.live i{width:5px;height:5px;border-radius:50%;background:var(--teal);animation:pulse 2.4s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--teal) 65%,transparent)}70%{box-shadow:0 0 0 6px transparent}100%{box-shadow:0 0 0 0 transparent}}
+.live.demo{color:var(--violet);border-color:color-mix(in srgb,var(--violet) 34%,transparent);background:var(--violet-d)}
+.live.demo i{background:var(--violet);animation:none}
+
+/* ---------- 卡片 ---------- */
+.card{position:relative;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px 22px;
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:var(--shadow);margin-bottom:16px}
+.card::before{content:"";position:absolute;top:0;left:10%;right:10%;height:1px;pointer-events:none;
+  background:linear-gradient(90deg,transparent,var(--hi),transparent)}
+.sec{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:34px 0 14px;flex-wrap:wrap}
+.sec h2{font-size:14px;font-weight:640;display:flex;align-items:center;gap:10px;letter-spacing:.01em}
+.sec h2 em{font-style:normal;font-size:11px;font-weight:600;color:var(--teal);letter-spacing:.1em;
+  border:1px solid color-mix(in srgb,var(--teal) 30%,transparent);background:var(--teal-d);padding:2px 7px;border-radius:6px}
+.sec .note{font-size:11px;color:var(--t3)}
+.grid{display:grid;gap:16px}
+
+/* ---------- Hero ---------- */
+.hero{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:28px;align-items:center;
+  background:var(--card);border:1px solid var(--line);border-radius:20px;padding:26px 28px;margin-top:20px;
+  box-shadow:var(--shadow);position:relative;overflow:hidden}
+.hero::after{content:"";position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(600px 260px at 0% 0%,var(--teal-d),transparent 70%)}
+.eyebrow{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--t3);font-weight:600;margin-bottom:8px}
+.hero-big{font-size:clamp(40px,5vw,62px);font-weight:700;letter-spacing:-.035em;line-height:1;
+  background:linear-gradient(100deg,var(--t1) 10%,var(--teal) 62%,var(--cyan));
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;white-space:nowrap}
+.hero-big small{font-size:.34em;font-weight:600;letter-spacing:0;margin-right:4px;-webkit-text-fill-color:var(--t3)}
+.hero-sub{font-size:12px;color:var(--t2);margin-top:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.hero-sub b{color:var(--t1);font-weight:600}
+.dot{width:3px;height:3px;border-radius:50%;background:var(--t4);flex:none;display:inline-block}
+.mini-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.mini{border:1px solid var(--line);border-radius:12px;padding:11px 13px;background:var(--card2);position:relative;overflow:hidden}
+.mini .k{font-size:10.5px;color:var(--t3);display:flex;align-items:center;gap:5px}
+.mini .v{font-size:19px;font-weight:660;letter-spacing:-.02em;margin-top:3px}
+.mini .s{font-size:10.5px;color:var(--t4);margin-top:2px}
+.mini.good .v{color:var(--teal)} .mini.bad .v{color:var(--rose)} .mini.warn .v{color:var(--amber)} .mini.info .v{color:var(--violet)}
+.bar-mini{height:3px;border-radius:3px;background:var(--line);margin-top:7px;overflow:hidden}
+.bar-mini i{display:block;height:100%;border-radius:3px;background:var(--teal)}
+
+/* ---------- 首屏省钱块 ---------- */
+.savings{margin-top:18px;border:1px solid color-mix(in srgb,var(--teal) 26%,transparent);
+  background:linear-gradient(118deg,var(--teal-d),transparent 72%);
+  border-radius:13px;padding:12px 14px 13px;cursor:pointer;transition:border-color .18s,transform .18s}
+.savings:hover{border-color:color-mix(in srgb,var(--teal) 48%,transparent);transform:translateY(-1px)}
+.sv-head{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap}
+.sv-k{font-size:10.5px;color:var(--t3);letter-spacing:.02em}
+.sv-v{font-size:25px;font-weight:700;letter-spacing:-.03em;color:var(--teal);line-height:1.1}
+.sv-p{font-size:10.5px;color:var(--t4)}
+.sv-go{margin-left:auto;font-size:10.5px;color:var(--teal);opacity:.85;white-space:nowrap}
+.sv-bar{height:5px;border-radius:3px;background:var(--line);margin:9px 0 9px;overflow:hidden}
+.sv-bar i{display:block;height:100%;border-radius:3px;width:0;
+  background:linear-gradient(90deg,var(--teal),var(--cyan));transition:width .85s cubic-bezier(.2,.7,.3,1)}
+.sv-chips{display:flex;gap:6px;flex-wrap:wrap}
+.sv-chips span{font-size:10px;color:var(--t3);border:1px solid var(--line);background:var(--card);
+  padding:2px 7px;border-radius:5px;white-space:nowrap}
+.sv-chips b{color:var(--teal);font-weight:650}
+
+/* ---------- 页签（使用量 / 省钱关键点） ---------- */
+[hidden]{display:none!important}
+.tabbar{display:inline-flex;gap:3px;padding:3px;border:1px solid var(--line);border-radius:12px;
+  background:var(--card2);margin:20px 0 14px}
+.tab{display:inline-flex;align-items:center;gap:7px;border:0;background:transparent;color:var(--t2);
+  font-size:12px;padding:7px 15px;border-radius:9px;cursor:pointer;transition:.16s;white-space:nowrap}
+.tab:hover{color:var(--t1)}
+.tab.on{background:var(--teal-d);color:var(--teal);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--teal) 36%,transparent)}
+.tab i{font-style:normal;font-size:10px;line-height:1;padding:3px 6px;border-radius:5px;
+  background:var(--line);color:var(--t3);font-weight:600}
+.tab.on i{background:color-mix(in srgb,var(--teal) 20%,transparent);color:var(--teal)}
+.panel.fade{animation:fadein .26s ease both}
+@keyframes fadein{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+
+/* ---------- KPI ---------- */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:9px;margin-top:16px}
+.kpi{border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--card2)}
+.kpi .k{font-size:10.5px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kpi b{display:block;font-size:17px;font-weight:650;letter-spacing:-.02em;margin-top:3px}
+.kpi .s{font-size:10px;color:var(--t4);margin-top:1px}
+
+/* ---------- 洞察 ---------- */
+.insights{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;margin-top:16px}
+.ins{padding:14px 16px;border-radius:13px;border:1px solid var(--line);background:var(--card2);
+  display:flex;gap:12px;align-items:flex-start}
+.ins .ic{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;flex:none;font-size:13px;
+  background:var(--teal-d);color:var(--teal)}
+.ins.b .ic{background:var(--rose-d);color:var(--rose)}
+.ins.w .ic{background:var(--amber-d);color:var(--amber)}
+.ins.v .ic{background:var(--violet-d);color:var(--violet)}
+.ins .t{font-size:11.5px;color:var(--t3);margin-bottom:2px}
+.ins .m{font-size:13px;color:var(--t1);font-weight:500;line-height:1.5}
+.ins .m b{color:var(--teal);font-weight:680}
+.ins.b .m b{color:var(--rose)} .ins.w .m b{color:var(--amber)} .ins.v .m b{color:var(--violet)}
+
+/* ---------- 图表容器 ---------- */
+.chart{width:100%;display:block;overflow:visible}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:10.5px;color:var(--t3);align-items:center}
+.legend i{width:8px;height:8px;border-radius:2px;display:inline-block;margin-right:4px;vertical-align:-1px}
+#tip{position:fixed;z-index:200;pointer-events:none;opacity:0;transition:opacity .12s;
+  background:var(--tt-bg);border:1px solid var(--tt-bd);border-radius:10px;padding:9px 12px;font-size:11.5px;
+  color:var(--t1);box-shadow:0 16px 40px -18px rgba(0,0,0,.8);max-width:320px;line-height:1.6;
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+#tip.on{opacity:1}
+#tip .tt-h{font-weight:640;margin-bottom:3px}
+#tip .tt-r{display:flex;justify-content:space-between;gap:14px;color:var(--t2)}
+#tip .tt-r b{color:var(--t1);font-weight:600}
+
+/* ---------- 表格 ---------- */
+.tbl-wrap{overflow-x:auto;margin:0 -6px}
+table{width:100%;border-collapse:collapse;font-size:11.5px}
+th{text-align:right;font-weight:500;color:var(--t3);padding:8px 10px;border-bottom:1px solid var(--line);
+  white-space:nowrap;position:sticky;top:0;background:var(--solid);cursor:pointer;user-select:none}
+th:hover{color:var(--t1)}
+th.l,td.l{text-align:left}
+td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+tr.row:hover td{background:var(--card2)}
+tr.row{cursor:pointer}
+td.name{max-width:330px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
+.tagline{display:inline-flex;gap:4px;align-items:center;font-size:10px;padding:1px 6px;border-radius:5px;
+  border:1px solid var(--line);color:var(--t3);background:var(--card2);white-space:nowrap}
+.tagline.hot{color:var(--rose);border-color:color-mix(in srgb,var(--rose) 28%,transparent);background:var(--rose-d)}
+.tagline.cool{color:var(--teal);border-color:color-mix(in srgb,var(--teal) 28%,transparent);background:var(--teal-d)}
+.tagline.mid{color:var(--amber);border-color:color-mix(in srgb,var(--amber) 28%,transparent);background:var(--amber-d)}
+.tagline.vi{color:var(--violet);border-color:color-mix(in srgb,var(--violet) 28%,transparent);background:var(--violet-d)}
+
+/* ---------- 模型顾问 ---------- */
+.adv{display:grid;grid-template-columns:1fr;gap:10px}
+.advrow{border:1px solid var(--line);border-radius:13px;padding:14px 16px;background:var(--card2);
+  display:grid;grid-template-columns:170px 1fr auto;gap:16px;align-items:center}
+.advrow .an{font-size:12.5px;font-weight:600;display:flex;flex-direction:column;gap:3px}
+.advrow .an small{font-size:10px;color:var(--t4);font-weight:400}
+.advrow .bars{display:flex;flex-direction:column;gap:5px;min-width:0}
+.advbar{display:grid;grid-template-columns:104px 1fr 74px;gap:8px;align-items:center;font-size:10.5px;color:var(--t3)}
+.advbar .track{height:14px;border-radius:4px;background:var(--line);overflow:hidden;position:relative}
+.advbar .fill{height:100%;border-radius:4px;transition:width .6s cubic-bezier(.2,.7,.3,1)}
+.advrow .save{text-align:right;min-width:96px}
+.advrow .save b{display:block;font-size:17px;font-weight:680;letter-spacing:-.02em;color:var(--teal)}
+.advrow .save small{font-size:10px;color:var(--t4)}
+.conf{display:inline-flex;gap:1px;color:var(--amber);font-size:9px;letter-spacing:-1px}
+
+/* ---------- 处方 ---------- */
+.rx{display:grid;gap:11px}
+.rxcard{border:1px solid var(--line);border-radius:14px;padding:15px 17px;background:var(--card2);position:relative;overflow:hidden}
+.rxcard::before{content:"";position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--t4)}
+.rxcard.high::before{background:var(--rose)} .rxcard.mid::before{background:var(--amber)} .rxcard.low::before{background:var(--cyan)} .rxcard.info::before{background:var(--violet)}
+.rxh{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;flex-wrap:wrap}
+.rxh h4{font-size:12.5px;font-weight:620;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.rxh .amt{font-size:15px;font-weight:680;color:var(--teal);letter-spacing:-.01em;white-space:nowrap}
+.rxp{font-size:11.5px;color:var(--t2);margin-top:7px;line-height:1.7}
+.rxev{display:flex;gap:8px;flex-wrap:wrap;margin-top:9px}
+.rxev span{font-size:10px;color:var(--t3);border:1px solid var(--line);border-radius:5px;padding:2px 7px;background:var(--card)}
+.rxev span b{color:var(--t2);font-weight:600}
+.rxa{margin-top:10px;font-size:11px;color:var(--t2);border-left:2px solid color-mix(in srgb,var(--teal) 30%,transparent);
+  padding-left:10px;line-height:1.7}
+.rxa b{color:var(--teal);font-weight:600}
+
+/* ---------- 抽屉 ---------- */
+.drawer-bg{position:fixed;inset:0;background:rgba(2,5,9,.62);backdrop-filter:blur(3px);z-index:90;opacity:0;pointer-events:none;transition:.2s}
+.drawer-bg.on{opacity:1;pointer-events:auto}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(560px,94vw);background:var(--solid);border-left:1px solid var(--line);
+  z-index:91;transform:translateX(100%);transition:transform .26s cubic-bezier(.2,.7,.3,1);overflow-y:auto;padding:22px 24px 40px}
+.drawer.on{transform:none}
+.drawer h3{font-size:14px;font-weight:640;line-height:1.5;padding-right:34px}
+.drawer .x{position:absolute;top:16px;right:16px;border:1px solid var(--line);background:var(--card2);color:var(--t2);
+  width:26px;height:26px;border-radius:8px;cursor:pointer;font-size:14px;line-height:1;display:grid;place-items:center}
+.drawer .x:hover{color:var(--t1)}
+.dstat{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:14px 0}
+.dstat div{border:1px solid var(--line);border-radius:9px;padding:8px 10px;background:var(--card2)}
+.dstat .k{font-size:10px;color:var(--t4)}
+.dstat .v{font-size:13.5px;font-weight:640;margin-top:1px}
+.dims{margin:8px 0 14px}
+.dim{display:grid;grid-template-columns:76px 1fr 40px;gap:9px;align-items:center;font-size:11px;color:var(--t3);margin-bottom:5px}
+.dim .tr{height:6px;border-radius:4px;background:var(--line);overflow:hidden}
+.dim .tr i{display:block;height:100%;border-radius:4px}
+.dim b{text-align:right;color:var(--t1);font-weight:600;font-size:11.5px}
+.dlist{font-size:11px;color:var(--t2);line-height:1.85}
+.dlist .it{display:flex;justify-content:space-between;gap:12px;border-bottom:1px dashed var(--line);padding:3px 0}
+.dlist .it span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dlist .it span:last-child{color:var(--t3);flex:none}
+
+/* ---------- 滑块 ---------- */
+.sliders{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:4px}
+.sl label{display:flex;justify-content:space-between;font-size:10.5px;color:var(--t3);margin-bottom:5px}
+.sl label b{color:var(--t1);font-weight:600}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:3px;border-radius:3px;background:var(--line);outline:none}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;
+  background:var(--teal);cursor:pointer;box-shadow:0 0 0 3px var(--teal-d)}
+input[type=range]::-moz-range-thumb{width:13px;height:13px;border:0;border-radius:50%;background:var(--teal);cursor:pointer}
+
+/* ---------- 门槛页 ---------- */
+.gate{position:fixed;inset:0;z-index:120;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:24px;
+  overflow-y:auto;transition:opacity .35s}
+.gate.off{opacity:0;pointer-events:none}
+.gate-in{max-width:880px;width:100%;text-align:center;margin:auto}
+.gate h2{font-size:clamp(24px,3.4vw,38px);font-weight:700;letter-spacing:-.03em;line-height:1.25;margin-bottom:14px}
+.gate h2 em{font-style:normal;background:linear-gradient(100deg,var(--teal),var(--cyan));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.gate p{color:var(--t2);font-size:13px;max-width:620px;margin:0 auto 8px;line-height:1.8}
+.gate .opts{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:26px 0 18px;text-align:left}
+.opt{border:1px solid var(--line);border-radius:15px;padding:18px;background:var(--card);cursor:pointer;transition:.2s;position:relative}
+.opt:hover{border-color:color-mix(in srgb,var(--teal) 40%,transparent);transform:translateY(-2px)}
+.opt .oi{height:24px;display:flex;align-items:center;margin-bottom:10px;color:var(--teal)}
+.opt h4{font-size:12.5px;font-weight:640;margin-bottom:5px;display:flex;align-items:center;gap:6px}
+.opt p{font-size:11px;color:var(--t3);line-height:1.65;margin:0}
+.opt .rec{font-size:9.5px;color:var(--teal);border:1px solid color-mix(in srgb,var(--teal) 30%,transparent);
+  background:var(--teal-d);padding:1px 5px;border-radius:4px}
+.gate .privacy{font-size:10.5px;color:var(--t4);line-height:1.8;border-top:1px solid var(--line);padding-top:14px;margin-top:8px}
+.gate .drop{border:2px dashed var(--line2);border-radius:16px;padding:26px;transition:.2s}
+.gate .drop.hot{border-color:var(--teal);background:var(--teal-d)}
+.err{color:var(--rose);font-size:11.5px;margin-top:10px;min-height:16px}
+.progress{height:3px;border-radius:3px;background:var(--line);overflow:hidden;margin-top:14px;display:none}
+.progress.on{display:block}
+.progress i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--teal),var(--cyan));transition:width .2s}
+
+/* ---------- 杂项 ---------- */
+.toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,12px);z-index:300;
+  background:var(--tt-bg);border:1px solid var(--tt-bd);color:var(--t1);border-radius:12px;padding:11px 16px;
+  font-size:11.5px;box-shadow:0 18px 44px -20px rgba(0,0,0,.8);opacity:0;pointer-events:none;transition:.22s;max-width:min(620px,92vw)}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+.empty{padding:26px;text-align:center;color:var(--t4);font-size:12px}
+.foot{color:var(--t4);font-size:10.5px;line-height:1.9;margin-top:8px}
+.foot b{color:var(--t3);font-weight:600}
+.kv{display:flex;justify-content:space-between;gap:14px;font-size:11.5px;padding:6px 0;border-bottom:1px dashed var(--line)}
+.kv span:first-child{color:var(--t3)} .kv span:last-child{color:var(--t1);font-weight:500}
+.formula{font-family:ui-monospace,Consolas,monospace;font-size:11px;background:var(--card2);border:1px solid var(--line);
+  border-radius:9px;padding:11px 13px;color:var(--t2);line-height:1.9;overflow-x:auto;white-space:pre}
+.formula b{color:var(--teal);font-weight:600}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.three{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.badge{font-size:9.5px;padding:1px 6px;border-radius:4px;border:1px solid var(--line);color:var(--t3);background:var(--card2);white-space:nowrap}
+.badge.t{color:var(--teal);border-color:color-mix(in srgb,var(--teal) 28%,transparent);background:var(--teal-d)}
+.badge.r{color:var(--rose);border-color:color-mix(in srgb,var(--rose) 28%,transparent);background:var(--rose-d)}
+.badge.a{color:var(--amber);border-color:color-mix(in srgb,var(--amber) 28%,transparent);background:var(--amber-d)}
+.badge.v{color:var(--violet);border-color:color-mix(in srgb,var(--violet) 28%,transparent);background:var(--violet-d)}
+
+@media (max-width:1080px){
+  .hero{grid-template-columns:1fr;gap:20px}
+  .two,.three{grid-template-columns:1fr}
+  .gate .opts{grid-template-columns:1fr}
+  .advrow{grid-template-columns:1fr;gap:10px}
+  .advrow .save{text-align:left;display:flex;align-items:baseline;gap:8px}
+}
+@media (max-width:680px){
+  .wrap{padding:0 14px}
+  .brand h1 span{display:none}
+  .sliders{grid-template-columns:1fr}
+  .mini-grid{grid-template-columns:1fr}
+  .dstat{grid-template-columns:1fr 1fr}
+}
+@media print{
+  header,.gate,.drawer,.drawer-bg,.toast,#tip{display:none!important}
+  body{background:#fff;color:#000}
+  .card{break-inside:avoid;box-shadow:none}
+}
+
+/* ============================================================
+   单页外壳：定高容器 + 页签 + 面板内滚动
+   放在文件末尾，用于覆盖上面的默认文档流排版
+   ============================================================ */
+html,body{height:100%}
+body{display:flex;flex-direction:column;height:100dvh;overflow:hidden;padding:0}
+header{flex:none}
+main.app{flex:1;min-height:0;display:flex;flex-direction:column;width:100%;padding-bottom:0}
+
+main.app .hero{flex:none;padding:18px 22px;margin-top:16px;gap:22px;grid-template-columns:minmax(0,1fr) minmax(0,1.45fr)}
+main.app .hero-big{font-size:clamp(34px,4vw,50px)}
+main.app .mini-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+main.app .mini{padding:9px 11px}
+main.app .savings{margin-top:14px;padding:10px 13px 11px}
+main.app .sv-v{font-size:23px}
+main.app .sv-bar{margin:8px 0}
+
+.tabbar{flex:none;display:flex;flex-wrap:wrap;gap:3px;padding:3px;border:1px solid var(--line);
+  border-radius:12px;background:var(--card2);margin:14px 0 12px;width:fit-content;max-width:100%}
+
+.panels{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding-bottom:34px;scrollbar-gutter:stable}
+.ph{display:flex;align-items:baseline;gap:10px;margin:0 0 12px;flex-wrap:wrap}
+.ph b{font-size:12.5px;font-weight:640;letter-spacing:.01em}
+.ph span{font-size:10.5px;color:var(--t4)}
+.ph .note{margin-left:auto;font-size:10.5px;color:var(--t3);font-weight:400}
+
+/* 窄屏 / 平板：退回普通文档流，避免定高容器把内容压扁 */
+@media (max-width:1080px){
+  html,body{height:auto}
+  body{display:block;height:auto;overflow:auto;padding-bottom:40px}
+  main.app{display:block;padding-bottom:0}
+  .panels{overflow:visible;display:block;padding-bottom:0}
+  main.app .hero{padding:22px 24px;margin-top:18px}
+  main.app .hero-big{font-size:clamp(38px,5.4vw,56px)}
+  .tabbar{margin:16px 0 14px}
+}
+
+/* 打印：全部展开 */
+@media print{
+  html,body{height:auto}
+  body{display:block;height:auto;overflow:visible}
+  main.app{display:block}
+  .panels{overflow:visible;height:auto;display:block}
+  .panel[hidden]{display:block!important}
+  .tabbar{display:none}
+}
+
+@media (max-width:680px){
+  main.app .mini-grid{grid-template-columns:1fr 1fr}
+  main.app .hero{padding:18px 16px}
+  .tabbar{gap:2px}
+  .tab{padding:6px 10px;font-size:11.5px}
+}
+
+/* 省钱块底部的「现金结论」一行 */
+.sv-note{margin-top:8px;padding-top:7px;font-size:10px;line-height:1.65;color:var(--t3);
+  border-top:1px dashed color-mix(in srgb,var(--teal) 24%,transparent)}
+.sv-note b{color:var(--t2);font-weight:640}
+
+@media (max-width:1280px){
+  main.app .hero{grid-template-columns:minmax(0,1fr) minmax(0,1.3fr)}
+  main.app .mini-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+
+/* ---------- Token 热点（周一→周日 × 0–23 时） ---------- */
+.heat{margin-top:13px;max-width:600px}
+.heat-hd{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:6px}
+.heat-t{font-size:10px;color:var(--t3);letter-spacing:.02em;white-space:nowrap}
+.heat-t em{font-style:normal;color:var(--t4);margin-left:6px;font-size:9px}
+.heat-peak{font-size:9.5px;color:var(--teal);white-space:nowrap;font-variant-numeric:tabular-nums}
+.hrow{display:flex;align-items:center;gap:2px;margin-bottom:2px}
+.hlab{width:22px;flex:none;font-size:9px;color:var(--t4);letter-spacing:-.03em;line-height:1}
+.hc{flex:1;height:11px;border-radius:2px;background:var(--line);cursor:default;
+  transition:transform .1s,box-shadow .1s}
+.hc:hover{transform:scale(1.35);box-shadow:0 0 0 1px var(--line2);position:relative;z-index:2}
+.heat-x{display:grid;grid-template-columns:repeat(24,1fr);gap:2px;margin:2px 0 0 24px}
+.heat-x span{font-size:8.5px;color:var(--t4);line-height:1;text-align:left}
+.heat-ft{display:flex;justify-content:space-between;align-items:center;margin:6px 0 0 24px;gap:10px}
+.heat-lg{display:flex;align-items:center;gap:3px;font-size:8.5px;color:var(--t4);white-space:nowrap}
+.heat-ramp{display:inline-flex;gap:2px}
+.heat-ramp i{width:9px;height:9px;border-radius:2px;display:block}
+.heat-note{font-size:8.5px;color:var(--t4);opacity:.75;text-align:right}
+
+/* ---------- Hero 第二行：两张图并排 ---------- */
+main.app .hero{grid-template-areas:"top cards" "charts charts";align-items:start}
+main.app .hero>div:first-child{grid-area:top}
+main.app .hero>.mini-grid{grid-area:cards}
+.hero-charts{grid-area:charts;grid-column:1/-1;display:grid;
+  grid-template-columns:minmax(0,600px) minmax(0,1fr);gap:24px;align-items:start;margin-top:4px}
+.hero-charts .heat{max-width:none;margin-top:0}
+
+/* 每日模型堆叠图 */
+.daily{margin-top:13px;min-width:0}
+.daily-hd{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:6px}
+.daily-t{font-size:10px;color:var(--t3);letter-spacing:.02em;white-space:nowrap}
+.daily-t em{font-style:normal;color:var(--t4);margin-left:6px;font-size:9px}
+.daily-peak{font-size:9.5px;color:var(--teal);white-space:nowrap;font-variant-numeric:tabular-nums}
+.daily svg{display:block;width:100%;overflow:visible}
+.daily-ft{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:4px;flex-wrap:wrap}
+.daily-lg{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.daily-lg span{display:flex;align-items:center;gap:4px;font-size:9px;color:var(--t3);white-space:nowrap}
+.daily-lg i{width:7px;height:7px;border-radius:2px;display:block;flex:none}
+.daily-note{font-size:8.5px;color:var(--t4);opacity:.75;white-space:nowrap}
+
+@media (max-width:900px){
+  .hero-charts{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap hd">
+    <div class="brand">
+      <div class="logo">¥</div>
+      <div>
+        <h1>workbuddy-spendLens<span>我帮你省钱</span></h1>
+        <div class="tag">
+          <span id="srcBadge" class="live"><i></i><span id="srcText">等待接入</span></span>
+          <span class="dot"></span>
+          <span id="rangeText">—</span>
+        </div>
+      </div>
+    </div>
+    <div class="hd-right">
+      <div class="seg" id="winSeg">
+        <button class="pill" data-w="7">7 天</button>
+        <button class="pill" data-w="30">30 天</button>
+        <button class="pill" data-w="90">90 天</button>
+        <button class="pill on" data-w="all">全部</button>
+      </div>
+      <select id="wsSel" title="按项目筛选"><option value="">全部项目</option></select>
+      <select id="modelSel" title="按模型筛选"><option value="">全部模型</option></select>
+      <select id="planSel" title="计费口径：按积分牌价，或你的实际套餐"></select>
+      <button class="btn" id="themeBtn" type="button" title="切换明暗">◐</button>
+      <button class="btn" id="rescanBtn" type="button" title="重新扫描本地日志">⟳ 重扫</button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap app">
+
+  <section class="hero">
+    <div>
+      <div class="eyebrow" id="heroEyebrow" style="text-transform:none;letter-spacing:.08em">实际 Token 消费</div>
+      <div class="hero-big"><span id="heroMain">—</span></div>
+      <div class="hero-sub" id="heroSub">—</div>
+      <div class="savings" id="heroSave" style="display:none"></div>
+    </div>
+    <div class="mini-grid" id="miniGrid"></div>
+    <div class="hero-charts">
+      <div class="heat" id="heroHeat"></div>
+      <div class="daily" id="heroDaily"></div>
+    </div>
+  </section>
+
+  <div class="tabbar" id="tabBar" role="tablist">
+    <button class="tab on" data-tab="usage" role="tab">使用量 · 构成</button>
+    <button class="tab" data-tab="save" role="tab">省钱关键点 <i id="rxCount">0</i></button>
+    <button class="tab" data-tab="money" role="tab">钱去哪了</button>
+    <button class="tab" data-tab="value" role="tab">价值地图</button>
+    <button class="tab" data-tab="model" role="tab">模型顾问</button>
+    <button class="tab" data-tab="ledger" role="tab">账本明细</button>
+    <button class="tab" data-tab="method" role="tab">方法论</button>
+  </div>
+
+  <div class="panels" id="panels">
+
+    <div class="panel fade" id="panelUsage" role="tabpanel">
+      <div class="ph"><b>使用量 · 使用构成</b><span>每一项都由日志逐条聚合，不是估算</span></div>
+      <div class="kpis" id="kpis"></div>
+      <div class="insights" id="insights"></div>
+    </div>
+
+    <div class="panel" id="panelSave" role="tabpanel" hidden>
+      <div class="card">
+        <div class="ph"><b>省钱关键点</b><span>按「可省金额 × 证据强度」排序，每条都附证据与动作</span><span class="note" id="rxSummary"></span></div>
+        <div class="rx" id="rxList"></div>
+      </div>
+    </div>
+
+    <div class="panel" id="panelMoney" role="tabpanel" hidden>
+      <div class="ph"><b>钱去哪了</b><span>成本按「未命中输入 / 缓存读取 / 输出」三段拆解，再与模型、任务原型交叉定位</span></div>
+      <div class="card" id="costCard"></div>
+      <div class="card" id="sankeyCard"></div>
+      <div class="card" id="projectCard"></div>
+    </div>
+
+    <div class="panel" id="panelValue" role="tabpanel" hidden>
+      <div class="ph"><b>价值地图</b><span>横轴花了多少钱，纵轴落了多少字 —— 右上角是明星，右下角是黑洞</span></div>
+      <div class="card" id="mapCard"></div>
+      <div class="card" id="rankCard"></div>
+    </div>
+
+    <div class="panel" id="panelModel" role="tabpanel" hidden>
+      <div class="ph"><b>模型顾问</b><span>单价不是抄官网，是从你自己的账单里反解出来的</span></div>
+      <div class="card" id="priceCard"></div>
+      <div class="card" id="adviceCard"></div>
+      <div class="card" id="simCard"></div>
+    </div>
+
+    <div class="panel" id="panelLedger" role="tabpanel" hidden>
+      <div class="ph"><b>账本明细</b><span>点表头排序，点任意一行查看这个会话的完整证据链</span></div>
+      <div class="card" id="ledgerCard"></div>
+    </div>
+
+    <div class="panel" id="panelMethod" role="tabpanel" hidden>
+      <div class="ph"><b>方法论与边界</b><span>所有公式、口径、已知偏差都写在这里</span></div>
+      <div class="card" id="methodCard"></div>
+      <div class="foot" id="footNote"></div>
+    </div>
+
+  </div>
+</main>
+
+<div class="gate" id="gate"><div class="gate-in" id="gateIn"></div></div>
+<div class="drawer-bg" id="drawerBg"></div>
+<aside class="drawer" id="drawer" aria-live="polite"></aside>
+<div id="tip"></div>
+<div class="toast" id="toast"></div>
+<div id="fatal" style="display:none;position:fixed;left:12px;bottom:12px;z-index:400;max-width:min(560px,92vw);
+  background:rgba(30,10,16,.96);border:1px solid rgba(251,113,133,.4);border-radius:12px;padding:12px 14px;
+  color:#fecdd3;font:11px/1.7 ui-monospace,Consolas,monospace;white-space:pre-wrap;max-height:40vh;overflow:auto"></div>
+<script>
+(function(){
+  function show(t){
+    var f=document.getElementById('fatal');
+    if(!f) return;
+    f.style.display='block';
+    f.textContent += t + '\n';
+    if(!f._btn){
+      f._btn=1;
+      var b=document.createElement('button');
+      b.textContent=' ✕ '; b.style.cssText='position:absolute;top:6px;right:8px;background:none;border:0;color:#fda4af;cursor:pointer;font-size:13px';
+      b.onclick=function(){f.style.display='none';};
+      f.appendChild(b);
+    }
+  }
+  window.addEventListener('error',function(e){
+    show('[运行时错误] '+(e.message||'')+'\n  '+(e.filename||'').split('/').pop()+':'+(e.lineno||''));
+  });
+  window.addEventListener('unhandledrejection',function(e){
+    show('[Promise 未捕获] '+((e.reason&&e.reason.message)||e.reason));
+  });
+})();
+</script>
+
+<script>/* ============================================================
+ * SpendLens Core — WorkBuddy 账单解析与省钱分析引擎
+ * 纯浏览器端，无依赖。数据不出本机。
+ * 数据契约见 README「数据模型」。
+ * ============================================================ */
+;(function (root) {
+  'use strict';
+
+  /* 两个「积分值多少钱」的口径，别混：
+     CP_USER    —— 展示口径。按用户实际计费方式折算（套餐折算单价 或 积分牌价 ¥0.05）
+     CP_NOMINAL —— 名义口径。只用于把官方牌价 ¥/M 换算成积分/M，不应随套餐变化 */
+  let CP_USER = 0.05;
+  const CP_NOMINAL = 0.05;
+
+  /* ---------------- 工具族 ---------------- */
+  const FAMILY = {
+    Bash: '执行', PowerShell: '执行',
+    Read: '勘探', Grep: '勘探', Glob: '勘探', LSP: '勘探',
+    Edit: '精修',
+    Write: '创作',
+    WebSearch: '调研', WebFetch: '调研',
+    Agent: '编排', SendMessage: '编排', TeamCreate: '编排', TeamDelete: '编排',
+    TaskCreate: '管理', TaskUpdate: '管理', TaskList: '管理', TaskGet: '管理', TaskStop: '管理',
+    present_files: '交付',
+  };
+  const FAMILY_LIST = ['执行', '勘探', '精修', '创作', '调研', '编排', '管理', '交付', '工具', '应答'];
+
+  function familyOf(name, args) {
+    if (!name) return '应答';
+    if (name === 'DeferExecuteTool' || name.startsWith('mcp__')) {
+      const t = args && (args.toolName || args.tool_name);
+      if (t && FAMILY[t]) return FAMILY[t];
+      return '工具';
+    }
+    return FAMILY[name] || '工具';
+  }
+
+  /* ---------------- 小工具 ---------------- */
+  const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+  const log2 = Math.log2;
+
+  function tsOf(v) {
+    // 统一返回毫秒时间戳
+    if (typeof v === 'number') {
+      if (v > 1e12) return Math.round(v);          // 已是毫秒
+      if (v > 1e9) return Math.round(v * 1000);    // 秒
+      return 0;
+    }
+    if (typeof v === 'string' && v) {
+      const t = Date.parse(v);
+      if (!isNaN(t)) return t;
+      const n = parseFloat(v);
+      if (!isNaN(n)) return n > 1e12 ? Math.round(n) : Math.round(n * 1000);
+    }
+    return 0;
+  }
+
+  function textOf(content) {
+    if (typeof content === 'string') return content;
+    if (!Array.isArray(content)) return '';
+    let s = '';
+    for (const seg of content) {
+      if (seg && typeof seg === 'object' && typeof seg.text === 'string') s += seg.text;
+    }
+    return s;
+  }
+
+  function outText(o) {
+    const out = o.output;
+    if (typeof out === 'string') return out;
+    if (Array.isArray(out)) {
+      let s = '';
+      for (const seg of out) if (seg && typeof seg === 'object' && typeof seg.text === 'string') s += seg.text;
+      return s;
+    }
+    if (out && typeof out === 'object') return typeof out.text === 'string' ? out.text : '';
+    return '';
+  }
+
+  function baseName(p) {
+    if (!p) return '';
+    const i = Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\'));
+    return i >= 0 ? p.slice(i + 1) : p;
+  }
+
+  /* ============================================================
+   * 1. 解析：jsonl 行 → 会话聚合
+   * files: [{ path, text }]   path 形如 <workdir>/<sid>/subagents/agent-x.jsonl
+   * ============================================================ */
+  function parseLogs(files, opt) {
+    opt = opt || {};
+    const S = new Map();          // sid -> session
+    const wsSet = new Map();      // folder -> idx
+    const wsArr = [];
+    const modelSet = new Map();
+    const models = [];
+    let bytes = 0, lineCount = 0, badLines = 0, creditRows = 0, genTools = [];
+
+    const getWs = (folder, label) => {
+      if (!wsSet.has(folder)) {
+        wsSet.set(folder, wsArr.length);
+        wsArr.push({ folder, label: label || shortWs(folder) });
+      }
+      return wsSet.get(folder);
+    };
+    const getModel = (m) => {
+      if (!modelSet.has(m)) { modelSet.set(m, models.length); models.push(m); }
+      return modelSet.get(m);
+    };
+    const getSess = (sid, wsIdx) => {
+      let s = S.get(sid);
+      if (!s) {
+        s = {
+          id: sid, ws: wsIdx, title: '', titleSrc: '', st: 0, en: 0,
+          rq: [],                       // 请求级
+          toolCount: {}, calls: 0, fails: 0, failCredit: 0,
+          filesNew: [], filesEdit: [], fileEdits: new Map(), fileReads: new Map(),
+          chars: 0, charsNew: 0, charsEdit: 0, pf: 0, turns: 0,
+          agentCalls: 0, agents: new Map(), subCredit: 0,
+          callIdx: new Map(),           // callId -> 请求索引（用于失败回填）
+        };
+        S.set(sid, s);
+      }
+      return s;
+    };
+
+    for (const f of files) {
+      const path = f.path || '';
+      const parts = path.split(/[\\/]/).filter(Boolean);
+      if (parts.length < 2) continue;
+      const folder = parts[0];
+      const isSub = parts.length > 2;
+      const sid = isSub ? parts[1] : parts[1].replace(/\.jsonl$/i, '');
+      const wsIdx = getWs(folder);
+      const s = getSess(sid, wsIdx);
+      const text = f.text || '';
+      bytes += text.length;
+
+      const lines = text.split('\n');
+      for (let li = 0; li < lines.length; li++) {
+        const line = lines[li];
+        if (!line) continue;
+        let o;
+        try { o = JSON.parse(line); } catch (e) { badLines++; continue; }
+        if (!o || typeof o !== 'object') continue;
+        lineCount++;
+        const type = o.type;
+
+        /* ---- 标题 ---- */
+        if (type === 'ai-title' && o.aiTitle && !s.title) {
+          s.title = String(o.aiTitle).slice(0, 60); s.titleSrc = 'ai';
+        }
+
+        /* ---- 用户轮次 / 兜底标题 ---- */
+        if ((type === 'message' || o.role === 'user') && o.role === 'user') {
+          const t = textOf(o.content).trim();
+          if (t && t.charCodeAt(0) !== 60 /* < */) {
+            s.turns++;
+            if (!s.title) { s.title = t.replace(/\s+/g, ' ').slice(0, 60); s.titleSrc = 'user'; }
+          }
+        }
+
+        const pd = o.providerData;
+        const ru = pd && typeof pd === 'object' ? pd.rawUsage : null;
+
+        /* ---- 工具调用 ---- */
+        if (type === 'function_call') {
+          s.calls++;
+          const name = o.name || '';
+          const fam = familyOf(name, o._argsParsed);
+          s.toolCount[fam] = (s.toolCount[fam] || 0) + 1;
+
+          let a = null;
+          try { a = JSON.parse(o.arguments || '{}'); } catch (e) { a = null; }
+          if (!a || typeof a !== 'object') a = {};
+          const fam2 = familyOf(name, a);
+          if (fam2 !== fam) { s.toolCount[fam]--; s.toolCount[fam2] = (s.toolCount[fam2] || 0) + 1; }
+
+          if (name === 'Write' && a.file_path) {
+            const c = typeof a.content === 'string' ? a.content : '';
+            s.chars += c.length; s.charsNew += c.length;
+            const b = baseName(a.file_path);
+            if (s.filesNew.indexOf(b) < 0) s.filesNew.push(b);
+            s.filesNew.paths = s.filesNew.paths || {};
+            s.filesNew.paths[b] = a.file_path;
+          } else if (name === 'Edit' && a.file_path) {
+            const c = typeof a.new_string === 'string' ? a.new_string : '';
+            s.chars += c.length; s.charsEdit += c.length;
+            const b = baseName(a.file_path);
+            if (s.filesEdit.indexOf(b) < 0) s.filesEdit.push(b);
+            s.fileEdits.set(b, (s.fileEdits.get(b) || 0) + 1);
+          } else if (name === 'Read' && a.file_path) {
+            const b = baseName(a.file_path);
+            s.fileReads.set(b, (s.fileReads.get(b) || 0) + 1);
+          } else if (name === 'present_files') {
+            s.pf++;
+          } else if (name === 'Agent') {
+            s.agentCalls++;
+          }
+          if (o.callId && ru && ru.total_tokens) s.callIdx.set(o.callId, s.rq.length);
+          else if (o.callId) s.callIdx.set(o.callId, -1);
+        }
+
+        /* ---- 工具结果：失败检测 ---- */
+        if (type === 'function_call_result') {
+          let bad = false;
+          if (o.status && o.status !== 'completed') bad = true;
+          else {
+            const t = outText(o);
+            const m = /Exit Code:\s*(-?\d+)/.exec(t);
+            if (m) bad = m[1] !== '0';
+            else if (/^(error|exception)[:\s]/i.test(t)) bad = true;
+          }
+          if (bad) {
+            s.fails++;
+            const ri = o.callId ? s.callIdx.get(o.callId) : -1;
+            if (ri >= 0 && s.rq[ri]) { s.rq[ri].fail = 1; s.failCredit += s.rq[ri].cr; }
+          }
+        }
+
+        /* ---- 请求级 usage ---- */
+        if (ru && ru.total_tokens) {
+          const ts = tsOf(o.timestamp);
+          if (!ts) continue;
+          const it = (ru.prompt_tokens != null ? ru.prompt_tokens : 0) | 0;
+          const ot = (ru.completion_tokens != null ? ru.completion_tokens : 0) | 0;
+          let hit = ru.prompt_cache_hit_tokens;
+          if (hit == null) {
+            const d = ru.prompt_tokens_details || {};
+            hit = d.cached_tokens || 0;
+          }
+          hit = hit | 0;
+          let cw = ru.prompt_cache_write_tokens || 0;
+          if (!cw) {
+            const d = ru.prompt_tokens_details || {};
+            cw = d.cache_write_tokens || d.cache_creation_tokens || 0;
+          }
+          const cr = ru.credit != null ? +ru.credit : null;
+          const model = pd.model || pd.requestModelId || pd.requestModelName || 'unknown';
+          const agent = pd.agent || '';
+          const toolName = type === 'function_call' ? (o.name || '') : '';
+          let fam3 = '应答';
+          if (toolName) {
+            let a2 = null;
+            try { a2 = JSON.parse(o.arguments || '{}'); } catch (e) { a2 = null; }
+            fam3 = familyOf(toolName, a2);
+          }
+          s.rq.push({
+            ts, it, ot, hit, cw, cr: cr == null ? 0 : cr, m: getModel(model),
+            f: fam3, sub: agent, fail: 0, tid: s.rq.length,
+          });
+          if (cr != null) creditRows++;
+          if (!s.st) s.st = ts;
+          s.en = Math.max(s.en || 0, ts);
+          if (agent) {
+            s.agents.set(agent, (s.agents.get(agent) || 0) + 1);
+            if (isSub) s.subCredit += (cr || 0);
+          }
+        }
+
+        /* ---- 非 token 计费（生成类工具）---- */
+        if (type === 'credit-usage') {
+          const pd2 = o.providerData || {};
+          const stage = String(pd2.stageId || '');
+          if (pd2.source === 'generation_tool' && pd2.credit != null) {
+            genTools.push({ ts: tsOf(o.timestamp), credit: +pd2.credit, stage, sid, ws: wsIdx });
+          }
+        }
+      }
+    }
+
+    /* ---- 收尾：清洗 + 排序 ---- */
+    const sessions = [];
+    for (const s of S.values()) {
+      if (!s.rq.length) continue;
+      s.rq.sort((a, b) => a.ts - b.ts);
+      s.rq.forEach((r, i) => { r.tid = i; });
+      // 重复读取
+      let dup = 0, readN = 0, worst = null, worstN = 0;
+      for (const [f, n] of s.fileReads) {
+        readN += n;
+        if (n > 1) {
+          dup += n - 1;
+          if (n > worstN) { worstN = n; worst = f; }
+        }
+      }
+      s.dupReads = dup; s.readCalls = readN; s.worstRead = worst; s.worstReadN = worstN;
+      s.filesTouched = uniq(s.filesNew.concat(s.filesEdit)).length;
+      s.credit = s.rq.reduce((a, r) => a + r.cr, 0);
+      s.in = s.rq.reduce((a, r) => a + r.it, 0);
+      s.hit = s.rq.reduce((a, r) => a + r.hit, 0);
+      s.out = s.rq.reduce((a, r) => a + r.ot, 0);
+      s.reqs = s.rq.length;
+      s.durMin = s.en > s.st ? (s.en - s.st) / 60000 : 0;
+      // 主导模型 + 模型构成（含积分/输出分摊）
+      const mc = new Map();
+      for (const r of s.rq) {
+        let e = mc.get(r.m);
+        if (!e) { e = { m: r.m, n: 0, credit: 0, out: 0, in: 0, hit: 0 }; mc.set(r.m, e); }
+        e.n++; e.credit += r.cr; e.out += r.ot; e.in += r.it; e.hit += r.hit;
+      }
+      let best = -1, bn = 0;
+      for (const [m, e] of mc) if (e.n > bn) { bn = e.n; best = m; }
+      s.domModel = best;
+      s.modelShare = Array.from(mc.values()).sort((a, b) => b.n - a.n);
+      s.toolTop = Object.entries(s.toolCount).sort((a, b) => b[1] - a[1]).slice(0, 4);
+      s.agentsN = s.agents.size;
+      s.arch = classifyArch(s);
+      sessions.push(s);
+    }
+    sessions.sort((a, b) => a.st - b.st);
+
+    // 生成类工具计费按会话回填
+    for (const g of genTools) {
+      for (const s of sessions) {
+        if (s.id === g.sid) { s.genCredit = (s.genCredit || 0) + g.credit; break; }
+      }
+    }
+
+    const range = { min: Infinity, max: 0 };
+    for (const s of sessions) { range.min = Math.min(range.min, s.st); range.max = Math.max(range.max, s.en); }
+    if (!isFinite(range.min)) range.min = Date.now();
+
+    return {
+      sessions, ws: wsArr, models, range,
+      files: files.length, bytes, lineCount, badLines, creditRows,
+      genTools,
+    };
+  }
+
+  function uniq(a) { return Array.from(new Set(a)); }
+
+  function shortWs(name) {
+    const i = name.lastIndexOf('-WorkBuddy-');
+    if (i >= 0 && name.slice(i + 11)) return name.slice(i + 11);
+    return name;
+  }
+
+  /* ============================================================
+   * 2. 任务原型分类
+   * ============================================================ */
+  const ARCHS = ['批量生产', '精修迭代', '代码勘探', '工程执行', '联网调研', '多智能体编排', '轻量问答'];
+  const ARCH_DESC = {
+    '批量生产': '大量新建文件、单轮产出高，常见于写稿/生成资料/批量落盘',
+    '精修迭代': '反复编辑同一批文件，逐轮打磨',
+    '代码勘探': '以读取与检索为主，低成本摸清现状',
+    '工程执行': '以命令行执行为主，跑脚本、装依赖、构建验证',
+    '联网调研': '以搜索与抓取为主，收集外部信息',
+    '多智能体编排': '派生多个子代理并行作业',
+    '轻量问答': '少量请求、低产出，以对话为主',
+  };
+
+  function classifyArch(s) {
+    const c = Math.max(1, s.calls);
+    const sh = k => (s.toolCount[k] || 0) / c;
+    const perReq = s.chars / Math.max(1, s.rq.length);
+    if (sh('编排') > 0.05 || s.agentsN >= 3 || s.agentCalls >= 4) return '多智能体编排';
+    if (sh('创作') > 0.16 || perReq > 2200) return '批量生产';
+    if (sh('调研') > 0.08) return '联网调研';
+    if (sh('精修') > 0.38) return '精修迭代';
+    if (sh('勘探') > 0.45) return '代码勘探';
+    if (sh('执行') > 0.40) return '工程执行';
+    return '轻量问答';
+  }
+
+  /* ============================================================
+   * 3. 价格系数反解（加权最小二乘 + 一次截尾）
+   * credit ≈ pm*miss + ph*hit + po*out   （单位：积分 / 百万 token）
+   * ============================================================ */
+  const OFFICIAL = {   // 官方牌价 ¥/百万 token（兜底用），hit=缓存命中，po=输出
+    'deepseek-v4.1-flash': { pm: 1.065, ph: 0.0426, po: 4.26, src: 'DeepSeek 官网（峰谷价取下限）' },
+    'kimi-k3.1-pro': { pm: 13, ph: 1.3, po: 68, src: 'Kimi 开放平台 K3 系列' },
+    'hy4-preview': { pm: 6, ph: 0.3, po: 18, src: '腾讯混元 Hy4 preview' },
+  };
+
+  function solve3(A, b) {
+    const M = [[...A[0], b[0]], [...A[1], b[1]], [...A[2], b[2]]];
+    for (let i = 0; i < 3; i++) {
+      let p = i;
+      for (let r = i + 1; r < 3; r++) if (Math.abs(M[r][i]) > Math.abs(M[p][i])) p = r;
+      if (Math.abs(M[p][i]) < 1e-12) return null;
+      [M[i], M[p]] = [M[p], M[i]];
+      for (let r = 0; r < 3; r++) {
+        if (r === i) continue;
+        const f = M[r][i] / M[i][i];
+        for (let c2 = i; c2 < 4; c2++) M[r][c2] -= f * M[i][c2];
+      }
+    }
+    return [M[0][3] / M[0][0], M[1][3] / M[1][1], M[2][3] / M[2][2]];
+  }
+
+  function fitOnce(rows, w) {
+    const X = [[0, 0, 0], [0, 0, 0], [0, 0, 0]], Y = [0, 0, 0];
+    for (const r of rows) {
+      const v = [r.miss / 1e6, r.hit / 1e6, r.out / 1e6];
+      const wt = w ? w(r) : 1;
+      for (let i = 0; i < 3; i++) {
+        Y[i] += wt * v[i] * r.cr;
+        for (let j = 0; j < 3; j++) X[i][j] += wt * v[i] * v[j];
+      }
+    }
+    const co = solve3(X, Y);
+    if (!co) return null;
+    let sse = 0, sst = 0, n = 0, mean = 0;
+    for (const r of rows) { mean += r.cr; n++; }
+    mean /= Math.max(1, n);
+    for (const r of rows) {
+      const p = co[0] * r.miss / 1e6 + co[1] * r.hit / 1e6 + co[2] * r.out / 1e6;
+      sse += (p - r.cr) * (p - r.cr);
+      sst += (r.cr - mean) * (r.cr - mean);
+    }
+    return { co, r2: sst > 0 ? 1 - sse / sst : 0, n };
+  }
+
+  function fitPricing(sessions, models) {
+    const byModel = new Map();
+    for (const s of sessions) {
+      for (const r of s.rq) {
+        let b = byModel.get(r.m);
+        if (!b) { b = []; byModel.set(r.m, b); }
+        b.push({ miss: Math.max(0, r.it - r.hit), hit: r.hit, out: r.ot, cr: r.cr });
+      }
+    }
+    const out = [];
+    for (const [mi, rows] of byModel) {
+      const name = models[mi];
+      let fit = null;
+      if (rows.length >= 40) {
+        fit = fitOnce(rows);
+        if (fit && (fit.co[0] <= 0 || fit.co[1] < 0 || fit.co[2] <= 0)) fit = null;
+      }
+      const totCredit = rows.reduce((a, r) => a + r.cr, 0);
+      const totOut = rows.reduce((a, r) => a + r.out, 0);
+      const totIn = rows.reduce((a, r) => a + r.miss + r.hit, 0);
+      const totHit = rows.reduce((a, r) => a + r.hit, 0);
+      let price, priceSrc, r2 = 0;
+      if (fit) { price = fit.co; priceSrc = '实测拟合'; r2 = fit.r2; }
+      else if (OFFICIAL[name]) {
+        const o = OFFICIAL[name];
+        price = [o.pm / CP_NOMINAL, o.ph / CP_NOMINAL, o.po / CP_NOMINAL];
+        priceSrc = '官方牌价'; r2 = 0;
+      } else {
+        price = null; priceSrc = '未知';
+      }
+      out.push({
+        m: mi, name, n: rows.length, credit: totCredit, out: totOut, in: totIn, hit: totHit,
+        // 积分/百万 token
+        pm: price ? price[0] : null, ph: price ? price[1] : null, po: price ? price[2] : null,
+        src: priceSrc, r2,
+        // 有效单价：每百万「有效折算 token」的积分
+        blended: price ? price[0] * (1 - totIn ? 0 : totHit / totIn) + price[1] * (totIn ? totHit / totIn : 0) : null,
+        yuanPerMOut: price ? price[2] * CP_USER : null,
+      });
+    }
+    out.sort((a, b) => b.credit - a.credit);
+    return out;
+  }
+
+  /* ============================================================
+   * 4. 聚合（带筛选）
+   * filter: { from, to, ws:Set|null, models:Set|null }
+   * ============================================================ */
+  function aggregate(RAW, filter) {
+    filter = filter || {};
+    const from = filter.from || 0, to = filter.to || Infinity;
+    const wsF = filter.ws && filter.ws.size ? filter.ws : null;
+    const mF = filter.models && filter.models.size ? filter.models : null;
+
+    const sess = [];
+    for (const s of RAW.sessions) {
+      if (s.en < from || s.st > to) continue;
+      if (wsF && !wsF.has(s.ws)) continue;
+      const rq = s.rq.filter(r => r.ts >= from && r.ts <= to && (!mF || mF.has(r.m)));
+      if (!rq.length) continue;
+      sess.push(mkView(s, rq));
+    }
+
+    // 全局
+    const T = {
+      credit: 0, in: 0, hit: 0, out: 0, reqs: 0, chars: 0, calls: 0, fails: 0,
+      failCredit: 0, dupReads: 0, readCalls: 0, pf: 0, turns: 0, filesNew: 0, filesTouched: 0,
+      genCredit: 0, subCredit: 0,
+    };
+    const byModel = new Map(), byWs = new Map(), byTool = new Map(), byArch = new Map();
+    const byDay = new Map();
+    const hourGrid = new Float64Array(7 * 24);
+    const heatGrid = new Float64Array(7 * 24);   // 周一→周日 × 0-23 时，单位 token
+    const reqSizes = [];
+
+    for (const s of sess) {
+      T.credit += s.credit; T.in += s.in; T.hit += s.hit; T.out += s.out;
+      T.reqs += s.reqs; T.chars += s.chars; T.calls += s.calls; T.fails += s.fails;
+      T.failCredit += s.failCredit; T.dupReads += s.dupReads; T.readCalls += s.readCalls;
+      T.pf += s.pf; T.turns += s.turns; T.filesNew += s.filesNew.length; T.filesTouched += s.filesTouched;
+      T.genCredit += s.genCredit || 0; T.subCredit += s.subCredit || 0;
+
+      // 模型
+      for (const r of s.rq) {
+        let m = byModel.get(r.m);
+        if (!m) { m = { m: r.m, reqs: 0, credit: 0, in: 0, hit: 0, out: 0, miss: 0, sess: new Set(), fails: 0, chars: 0 }; byModel.set(r.m, m); }
+        m.reqs++; m.credit += r.cr; m.in += r.it; m.hit += r.hit; m.out += r.ot;
+        m.miss += Math.max(0, r.it - r.hit); m.fails += r.fail; m.sess.add(s.id);
+        // 工具族
+        let t = byTool.get(r.f);
+        if (!t) { t = { f: r.f, reqs: 0, credit: 0, in: 0, hit: 0, out: 0 }; byTool.set(r.f, t); }
+        t.reqs++; t.credit += r.cr; t.in += r.it; t.hit += r.hit; t.out += r.ot;
+        const d = dayKey(r.ts);
+        let dd = byDay.get(d);
+        if (!dd) { dd = { d, credit: 0, reqs: 0, out: 0, m: new Map() }; byDay.set(d, dd); }
+        dd.credit += r.cr; dd.reqs++; dd.out += r.ot;
+        dd.m.set(r.m, (dd.m.get(r.m) || 0) + r.cr);
+        const dt = new Date(r.ts);
+        hourGrid[dt.getDay() * 24 + dt.getHours()] += r.cr;
+        heatGrid[((dt.getDay() + 6) % 7) * 24 + dt.getHours()] += (r.it + r.ot);
+        if (reqSizes.length < 40000) reqSizes.push(r.it + r.ot);
+      }
+      // 会话的产出字符按输出 token 占比分摊（写作量与输出强相关，优于按请求数分摊）
+      for (const ms of s.modelShare) {
+        const m = byModel.get(ms.m);
+        if (m) m.chars += s.chars * (ms.out / Math.max(1, s.out));
+      }
+      // 工作空间
+      let w = byWs.get(s.ws);
+      if (!w) { w = { w: s.ws, label: RAW.ws[s.ws] ? RAW.ws[s.ws].label : 'ws' + s.ws, credit: 0, reqs: 0, chars: 0, sess: [], out: 0, in: 0 }; byWs.set(s.ws, w); }
+      w.credit += s.credit; w.reqs += s.reqs; w.chars += s.chars; w.out += s.out; w.in += s.in;
+      w.sess.push(s);
+      // 原型
+      let a = byArch.get(s.arch);
+      if (!a) { a = { arch: s.arch, credit: 0, chars: 0, reqs: 0, n: 0, models: new Map() }; byArch.set(s.arch, a); }
+      a.credit += s.credit; a.chars += s.chars; a.reqs += s.reqs; a.n++;
+      for (const ms of s.modelShare) {
+        const prev = a.models.get(ms.m) || { m: ms.m, credit: 0, n: 0, chars: 0, out: 0 };
+        prev.credit += ms.credit; prev.n += ms.n; prev.out += ms.out; prev.chars += s.chars * (ms.out / Math.max(1, s.out));
+        a.models.set(ms.m, prev);
+      }
+    }
+
+    const pricing = fitPricing(sess, RAW.models);
+
+    // 派生
+    T.yuan = T.credit * CP_USER;
+    T.cacheRate = T.in ? T.hit / T.in : 0;
+    T.outputShare = (T.in + T.out) ? T.out / (T.in + T.out) : 0;
+    T.avgIn = T.reqs ? T.in / T.reqs : 0;
+    T.perKChar = T.chars > 0 ? T.yuan / (T.chars / 1000) : null;
+    T.cacheSaving = 0;
+    const split = { miss: 0, hit: 0, out: 0 };
+    for (const m of pricing) {
+      if (m.pm == null) continue;
+      const bm = byModel.get(m.m);
+      if (!bm) continue;
+      const missC = bm.miss / 1e6 * m.pm;
+      const hitC = bm.hit / 1e6 * m.ph;
+      const outC = bm.out / 1e6 * m.po;
+      split.miss += missC * CP_USER;
+      split.hit += hitC * CP_USER;
+      split.out += outC * CP_USER;
+      T.cacheSaving += bm.hit / 1e6 * (m.pm - m.ph) * CP_USER;
+    }
+    split.other = Math.max(0, T.yuan - split.miss - split.hit - split.out);
+    T.costSplit = split;
+    T.cacheSaving = Math.max(0, T.cacheSaving);
+
+    /* 官方 API 等价：与上面的「实测拟合」是两套口径 ——
+       这里用官网公开牌价 × 你的真实 token 结构，回答「如果直接调官方 API 要花多少」。
+       没有公开牌价的模型不计入，并返回覆盖比例，避免拿部分样本冒充全量。 */
+    let official = 0, officialCover = 0;
+    const officialMissing = [];
+    const officialByModel = [];
+    for (const m of byModel.values()) {
+      const name = RAW.models[m.m];
+      const o = OFFICIAL[name];
+      const actual = m.credit * CP_USER;
+      if (!o) {
+        officialMissing.push(name);
+        officialByModel.push({ m: m.m, name, official: null, actual, delta: null });
+        continue;
+      }
+      const c = (m.miss / 1e6) * o.pm + (m.hit / 1e6) * o.ph + (m.out / 1e6) * o.po;
+      official += c;
+      officialCover += m.credit;
+      officialByModel.push({ m: m.m, name, official: c, actual, delta: c - actual });
+    }
+    officialByModel.sort((a, b) => (a.delta == null ? 1 : b.delta == null ? -1 : a.delta - b.delta));
+    T.official = official;
+    T.officialCover = T.credit > 0 ? officialCover / T.credit : 0;
+    T.officialMissing = officialMissing;
+    T.officialByModel = officialByModel;
+    T.saveYuan = official - T.yuan;                       // 官方等价 − 实付积分折算
+    T.savePct = official > 0 ? T.saveYuan / official : 0;
+
+    /* 统计窗口天数：按「日历天数」算，不按有活动的天数。
+       订阅费是按下单周期摊的固定支出，7 天窗口就是 7 天的钱，
+       跟这 7 天里有几天真的在干活无关。 */
+    const effFrom = Math.max(from || 0, RAW.range.min);
+    const effTo = Math.min(to === Infinity ? RAW.range.max : to, RAW.range.max);
+    const winDays = Math.max(1, (effTo - effFrom) / 86400000);
+    T.days = winDays;
+    T.perMonthCredit = T.credit / (winDays / 30.4375);
+
+    // 会话评分（需要全局中位数）
+    const effs = sess.filter(s => s.chars > 0).map(s => s.credit / (s.chars / 1000) * CP_USER).sort((a, b) => a - b);
+    const medianEff = effs.length ? effs[Math.floor(effs.length / 2)] : null;
+    const maxChars = sess.reduce((a, s) => Math.max(a, s.chars), 1);
+    const maxRead = sess.reduce((a, s) => Math.max(a, s.fileReads.size), 1);
+    for (const s of sess) scoreSession(s, medianEff, maxChars, maxRead);
+
+    const days = Array.from(byDay.values()).sort((a, b) => a.d < b.d ? -1 : 1);
+
+    return {
+      RAW, filter, sess, T, pricing, medianEff, days, hourGrid, heatGrid,
+      byModel: Array.from(byModel.values()).sort((a, b) => b.credit - a.credit),
+      byWs: Array.from(byWs.values()).sort((a, b) => b.credit - a.credit),
+      byTool: Array.from(byTool.values()).sort((a, b) => b.credit - a.credit),
+      byArch: Array.from(byArch.values()).sort((a, b) => b.credit - a.credit),
+      reqSizes,
+    };
+  }
+
+  function mkView(s, rq) {
+    const inT = rq.reduce((a, r) => a + r.it, 0);
+    const hitT = rq.reduce((a, r) => a + r.hit, 0);
+    const outT = rq.reduce((a, r) => a + r.ot, 0);
+    const credit = rq.reduce((a, r) => a + r.cr, 0);
+    // 会话级指标（产出字数/失败数/重复读）在筛选后按输出 token 占比折算，
+    // 否则「按模型筛」或「按时间窗筛」时会把整会话的量算到子集上。
+    const f = s.out > 0 ? clamp(outT / s.out, 0, 1) : (rq.length === s.reqs ? 1 : 0);
+    const full = rq.length === s.reqs;
+    // 模型构成也要按筛选后的请求重算，否则桑基图会画出被筛掉的模型
+    const mc = new Map();
+    for (const r of rq) {
+      let e = mc.get(r.m);
+      if (!e) { e = { m: r.m, n: 0, credit: 0, out: 0, in: 0, hit: 0 }; mc.set(r.m, e); }
+      e.n++; e.credit += r.cr; e.out += r.ot; e.in += r.it; e.hit += r.hit;
+    }
+    return {
+      id: s.id, ws: s.ws, title: s.title || '(未命名会话)', titleSrc: s.titleSrc,
+      arch: s.arch, st: s.st, en: s.en, rq,
+      reqs: rq.length, credit, in: inT, hit: hitT, out: outT,
+      chars: Math.round(s.chars * f),
+      calls: full ? s.calls : rq.length,
+      fails: full ? s.fails : Math.round(s.fails * f),
+      failCredit: s.failCredit * f,
+      dupReads: Math.round(s.dupReads * f), readCalls: full ? s.readCalls : Math.round(s.readCalls * f),
+      worstRead: s.worstRead, worstReadN: s.worstReadN,
+      filesNew: s.filesNew, filesEdit: s.filesEdit, fileEdits: s.fileEdits, fileReads: s.fileReads,
+      filesTouched: full ? s.filesTouched : Math.round(s.filesTouched * f),
+      pf: s.pf, turns: s.turns,
+      toolCount: s.toolCount, toolTop: s.toolTop,
+      modelShare: Array.from(mc.values()).sort((a, b) => b.n - a.n),
+      domModel: (Array.from(mc.values()).sort((a, b) => b.n - a.n)[0] || { m: s.domModel }).m,
+      agentsN: s.agentsN, agentCalls: s.agentCalls, agents: s.agents,
+      genCredit: (s.genCredit || 0) * f, subCredit: s.subCredit * f,
+      durMin: s.en > s.st ? (s.en - s.st) / 60000 : 0,
+      charsNew: Math.round(s.charsNew * f), charsEdit: Math.round(s.charsEdit * f),
+      partial: !full,
+    };
+  }
+
+  function dayKey(ts) {
+    const d = new Date(ts);
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+
+  /* ============================================================
+   * 5. 价值评分（三维 + 可调权重）
+   *    设计取舍：不设「规模」维，因为它与交付力高度相关，重复计权会放大
+   *    大任务的优势。成本不进入价值分，而是作为分母独立呈现为性价比。
+   * ============================================================ */
+  const W_DEFAULT = { d: 0.45, e: 0.35, h: 0.20 };
+
+  function scoreSession(s, medianEff, maxChars, maxRead) {
+    const yuan = s.credit * CP_USER;
+    const perK = s.chars > 0 ? yuan / (s.chars / 1000) : null;
+
+    /* 交付力 D：有没有真的落下东西（对数尺度，相对本批最大产出归一） */
+    let D, dNa = false;
+    if (s.chars > 0) {
+      D = 100 * Math.log10(1 + s.chars) / Math.log10(1 + Math.max(maxChars, 10));
+      if (s.pf > 0) D = Math.min(100, D + 6);
+    } else if (s.filesTouched > 0) {
+      D = Math.min(45, 12 * Math.log10(1 + s.filesTouched));
+      dNa = true;
+    } else {
+      D = Math.min(42, 100 * Math.log10(1 + s.fileReads.size) / Math.log10(1 + Math.max(maxRead, 10)) * 0.42);
+      dNa = true;
+    }
+    D = clamp(D, 0, 100);
+
+    /* 效率 E：单位成本 vs 本批中位数。无落盘产出时不可比，取中性分 */
+    let E, eNa = false;
+    if (perK != null && medianEff) {
+      E = clamp(60 * Math.sqrt(medianEff / Math.max(perK, 1e-4)), 0, 100);
+    } else {
+      E = 55; eNa = true;
+    }
+
+    /* 健康 H：失败、重复读、上下文膨胀 */
+    const errRate = s.calls ? s.fails / s.calls : 0;
+    const dupShare = s.readCalls ? s.dupReads / s.readCalls : 0;
+    const avgIn = s.reqs ? s.in / s.reqs : 0;
+    const bloat = clamp(avgIn / 120000, 0, 1);
+    const H = clamp(100 - 45 * clamp(errRate / 0.15, 0, 1) - 30 * clamp(dupShare / 0.5, 0, 1) - 25 * bloat, 0, 100);
+
+    s.D = D; s.E = E; s.H = H; s.dNa = dNa; s.eNa = eNa;
+    s.perK = perK;
+    s.yuan = yuan;
+    s.eff = s.chars > 0 ? s.chars / Math.max(yuan, 0.01) : 0;  // 字/元
+    s.errRate = errRate; s.dupShare = dupShare; s.avgIn = avgIn;
+    s.value = (W_DEFAULT.d * D + W_DEFAULT.e * E + W_DEFAULT.h * H);
+    return s;
+  }
+
+  function rescore(sessions, w) {
+    const sw = (w.d + w.e + w.h) || 1;
+    for (const s of sessions) {
+      s.value = (w.d * s.D + w.e * s.E + w.h * s.H) / sw;
+    }
+    return sessions;
+  }
+
+  /* ============================================================
+   * 6. 反事实：这个会话换模型会花多少
+   * ============================================================ */
+  function counterfactual(s, pricing, targetM) {
+    const p = pricing.find(x => x.m === targetM);
+    if (!p || p.pm == null) return null;
+    let miss = 0, hit = 0, out = 0;
+    for (const r of s.rq) { miss += Math.max(0, r.it - r.hit); hit += r.hit; out += r.ot; }
+    const credits = (miss / 1e6) * p.pm + (hit / 1e6) * p.ph + (out / 1e6) * p.po;
+    return {
+      m: targetM, name: p.name, credits,
+      yuan: credits * CP_USER,
+      deltaYuan: (credits - s.credit) * CP_USER,
+      pct: s.credit > 0 ? (credits / s.credit - 1) : 0,
+      src: p.src, r2: p.r2,
+    };
+  }
+
+  /* 选择性替换：只替换低判断力动作（勘探/执行/调研/管理）的请求 */
+  const LOW_JUDGMENT = new Set(['勘探', '执行', '调研', '管理']);
+
+  function counterfactualSelective(s, pricing, targetM) {
+    const p = pricing.find(x => x.m === targetM);
+    if (!p || p.pm == null) return null;
+    let credits = 0, switched = 0, kept = 0;
+    const byModel = new Map(pricing.map(x => [x.m, x]));
+    for (const r of s.rq) {
+      const cur = byModel.get(r.m);
+      if (LOW_JUDGMENT.has(r.f) && cur && cur.pm != null) {
+        credits += (Math.max(0, r.it - r.hit) / 1e6) * p.pm + (r.hit / 1e6) * p.ph + (r.ot / 1e6) * p.po;
+        switched++;
+      } else {
+        credits += r.cr; kept++;
+      }
+    }
+    return {
+      m: targetM, name: p.name, credits, yuan: credits * CP_USER,
+      deltaYuan: (credits - s.credit) * CP_USER,
+      pct: s.credit > 0 ? (credits / s.credit - 1) : 0,
+      switched, kept, src: p.src,
+    };
+  }
+
+  /* ============================================================
+   * 7. 模型顾问：按任务原型给推荐（只依赖积分，不依赖汇率）
+   * ============================================================ */
+  function advise(AGG) {
+    const priced = AGG.pricing.filter(p => p.pm != null && p.pm > 0);
+    const out = [];
+    for (const a of AGG.byArch) {
+      if (a.credit <= 0) continue;
+      const sess = AGG.sess.filter(s => s.arch === a.arch);
+      if (!sess.length) continue;
+      const cur = sess.reduce((x, s) => x + s.credit, 0);
+
+      const cands = priced.map(p => {
+        let full = 0, sel = 0;
+        for (const s of sess) {
+          for (const r of s.rq) {
+            const unit = (Math.max(0, r.it - r.hit) / 1e6) * p.pm + (r.hit / 1e6) * p.ph + (r.ot / 1e6) * p.po;
+            full += unit;
+            sel += LOW_JUDGMENT.has(r.f) ? unit : r.cr;
+          }
+        }
+        const obs = a.models.get(p.m);
+        const obsReqs = obs ? obs.n : 0;
+        const obsChars = obs ? obs.chars : 0;
+        return {
+          m: p.m, name: p.name, full, sel,
+          fullYuan: full * CP_USER, selYuan: sel * CP_USER,
+          obsReqs, obsChars,
+          obsOutPerReq: obsReqs ? (obs.out || 0) / obsReqs : 0,
+          charsPerReq: obsReqs ? obsChars / obsReqs : 0,
+          src: p.src, r2: p.r2,
+          // 只有在该原型下真实跑过、且样本不是零星几次，才允许作为推荐目标
+          eligible: obsReqs >= Math.max(20, a.reqs * 0.02),
+        };
+      });
+
+      const elig = cands.filter(c => c.eligible);
+      const bySel = elig.slice().sort((x, y) => x.sel - y.sel);
+      let best = bySel[0] || null;
+      // 稳定器：若最省模型相对「本原型下用得最多的模型」优势不足 8%，不折腾
+      const incumb = elig.slice().sort((x, y) => y.obsReqs - x.obsReqs)[0] || null;
+      let kept = false;
+      if (best && incumb && best.m !== incumb.m && best.sel > incumb.sel * 0.92) {
+        best = incumb; kept = true;
+      }
+      const curTop = cands.slice().sort((x, y) => y.obsReqs - x.obsReqs)[0] || null;
+      const saveSel = best ? Math.max(0, cur - best.sel) : 0;
+      const saveFull = bySel.length ? Math.max(0, cur - bySel[0].full) : 0;
+
+      // 置信度：原型样本量 × 可比较模型数
+      let conf = 0;
+      if (a.reqs >= 2000 && elig.length >= 2) conf = 3;
+      else if (a.reqs >= 300 && elig.length >= 2) conf = 2;
+      else if (elig.length >= 1 && a.reqs >= 30) conf = 1;
+
+      out.push({
+        arch: a.arch, desc: ARCH_DESC[a.arch], n: a.n, reqs: a.reqs, credit: cur,
+        chars: a.chars, perKChar: a.chars > 0 ? cur / (a.chars / 1000) : null,
+        cands: cands.sort((x, y) => x.sel - y.sel),
+        best, curTop, kept,
+        saveSel, saveSelYuan: saveSel * CP_USER,
+        saveFull, saveFullYuan: saveFull * CP_USER,
+        saveCredit: saveSel, saveYuan: saveSel * CP_USER,
+        pctSel: cur > 0 ? saveSel / cur : 0,
+        conf,
+      });
+    }
+    out.sort((a, b) => b.saveSel - a.saveSel || b.credit - a.credit);
+    return out;
+  }
+
+  /* ============================================================
+   * 8. 省钱处方（规则引擎）
+   * ============================================================ */
+  function prescribe(AGG) {
+    const F = [];
+    const T = AGG.T;
+    const r2 = n => Math.round(n * 100) / 100;
+
+    /* 规则 1：无产出的高消耗会话 */
+    const noOut = AGG.sess.filter(s => s.chars === 0 && s.yuan >= 0.5).sort((a, b) => b.yuan - a.yuan);
+    if (noOut.length) {
+      const sum = noOut.reduce((a, s) => a + s.yuan, 0);
+      F.push({
+        id: 'no-output', level: sum > T.yuan * 0.08 ? 'high' : 'mid',
+        title: '花了钱，但什么都没落盘',
+        detail: `${noOut.length} 个会话零文件产出，合计 ¥${r2(sum)}。这类会话通常是长期对话、只读排查，或任务中途被放弃。`,
+        est: sum, tag: '空转',
+        evidence: noOut.slice(0, 5).map(s => ({ t: s.title, v: `¥${r2(s.yuan)} / ${s.reqs} 次请求` })),
+        action: '把「先问清楚再动手」变成习惯：只在确认方向后再开长会话；纯咨询类问题用短会话，避免上下文滚雪球。',
+      });
+    }
+
+    /* 规则 2：重复读取同一文件 */
+    const dup = AGG.sess.filter(s => s.dupReads >= 15).sort((a, b) => b.dupReads - a.dupReads);
+    if (dup.length) {
+      let est = 0;
+      for (const s of dup) {
+        const share = s.readCalls ? s.dupReads / Math.max(1, s.calls) : 0;
+        est += s.yuan * Math.min(0.35, share);
+      }
+      F.push({
+        id: 'dup-read', level: est > T.yuan * 0.05 ? 'high' : 'mid',
+        title: '同一份文件被反复读取',
+        detail: `${dup.length} 个会话存在大量重复读取，最严重的是《${dup[0].worstRead || '—'}》被读了 ${dup[0].worstReadN} 次。每次重读都要把整段内容重新灌进上下文。`,
+        est, tag: '重复劳动',
+        evidence: dup.slice(0, 5).map(s => ({ t: s.title, v: `${s.dupReads} 次重复读 · ¥${r2(s.yuan)}` })),
+        action: '把关键结论写进项目 memory 或一个「摘要文件」，下次直接读摘要；长文档交给子代理去读，只回传要点。',
+      });
+    }
+
+    /* 规则 3：失败工具调用的成本 */
+    if (T.failCredit > 0) {
+      const est = T.failCredit * CP_USER;
+      F.push({
+        id: 'fail-retry', level: est > T.yuan * 0.03 ? 'high' : 'low',
+        title: '失败的工具调用也在计费',
+        detail: `${T.fails} 次工具调用以非零退出码结束，这些请求仍消耗 ¥${r2(est)}。多为路径不存在、依赖缺失、命令语法错误。`,
+        est, tag: '无效开销',
+        evidence: AGG.sess.filter(s => s.fails > 0).sort((a, b) => b.fails - a.fails).slice(0, 5)
+          .map(s => ({ t: s.title, v: `${s.fails} 次失败 / ¥${r2(s.yuan)}` })),
+        action: '让 Agent 先 `ls` 或 `--version` 探路再执行；把常用路径与虚拟环境写进项目约定，减少试错轮次。',
+      });
+    }
+
+    /* 规则 4：上下文复读税 */
+    if (T.hit > 0 && T.cacheSaving > 0) {
+      const extra = T.cacheSaving * 0.5;   // 命中率腰斩 → 多付的部分
+      F.push({
+        id: 'cache', level: 'info',
+        title: `你省下的 ¥${r2(T.cacheSaving)} 全靠缓存命中`,
+        detail: `输入的 ${(T.cacheRate * 100).toFixed(1)}% 命中缓存。若命中率掉到 50%，同样工作量大约多花 ¥${r2(extra)}。`,
+        est: 0, tag: '风险敞口',
+        evidence: [
+          { t: '缓存命中 input', v: fmtInt(T.hit) + ' tokens' },
+          { t: '未命中 input', v: fmtInt(T.in - T.hit) + ' tokens' },
+          { t: '输出', v: fmtInt(T.out) + ' tokens' },
+        ],
+        action: '缓存是长会话的命门：不要在会话中途大改系统提示或切换模型，那会让整段前缀缓存失效。',
+      });
+    }
+
+    /* 规则 5：上下文膨胀 */
+    const big = AGG.sess.filter(s => s.reqs >= 200 && s.avgIn > 100000).sort((a, b) => b.avgIn - a.avgIn);
+    if (big.length) {
+      F.push({
+        id: 'bloat', level: 'mid',
+        title: '超长会话的上下文滚雪球',
+        detail: `${big.length} 个会话平均每轮带入 ${fmtInt(big[0].avgIn)} tokens 输入（${big[0].reqs} 轮）。每一轮都在为前文付钱，哪怕命中缓存也是成本。`,
+        est: 0, tag: '结构性成本',
+        evidence: big.slice(0, 5).map(s => ({ t: s.title, v: `每轮 ${fmtInt(s.in / s.reqs)} tok · ${s.reqs} 轮` })),
+        action: '把长任务切成阶段，每个阶段结束就开新会话并只带「结论」入场；中间过程丢给子代理，主线程保持干净。',
+      });
+    }
+
+    /* 规则 6：文件反复编辑（打磨 vs 空转） */
+    const churn = AGG.sess.map(s => {
+      let worst = null, n = 0;
+      for (const [f, c] of s.fileEdits) if (c > n) { n = c; worst = f; }
+      return { s, worst, n };
+    }).filter(x => x.n >= 10).sort((a, b) => b.n - a.n);
+    if (churn.length) {
+      F.push({
+        id: 'churn', level: 'low',
+        title: '同一个文件被改了十几遍',
+        detail: `《${churn[0].worst}》在单个会话里被编辑 ${churn[0].n} 次。如果是逐字打磨，这是正常成本；如果是改错方向反复回滚，就是纯浪费。`,
+        est: 0, tag: '返工',
+        evidence: churn.slice(0, 5).map(x => ({ t: `${x.worst}`, v: `${x.n} 次编辑 · ${x.s.title.slice(0, 18)}` })),
+        action: '大改前先让 Agent 复述一遍方案，确认后再写；单次 Edit 的范围给足，避免「改一句看一眼」的碎步。',
+      });
+    }
+
+    /* 规则 7：模型错配（来自顾问结论） */
+    const adv = advise(AGG).filter(a => a.best && a.saveSelYuan > 0.05);
+    for (const a of adv.slice(0, 3)) {
+      F.push({
+        id: 'route-' + a.arch, level: a.saveSelYuan > T.yuan * 0.05 ? 'high' : 'mid',
+        title: `「${a.arch}」类任务的下沉空间 ¥${r2(a.saveSelYuan)}`,
+        detail: `这类任务共 ${a.reqs} 次请求、当前 ¥${r2(a.credit * CP_USER)}。把检索/执行/调研这类低判断力请求下沉到 ${a.best.name}，预计降到 ¥${r2(a.best.selYuan)}（-${(a.pctSel * 100).toFixed(0)}%）；若全量替换则 ¥${r2(a.best.fullYuan)}。`,
+        est: a.saveSelYuan, tag: '模型路由',
+        evidence: a.cands.slice(0, 4).map(c => ({
+          t: c.name + (c.eligible ? '' : ' · 待验证'),
+          v: `全量 ¥${r2(c.fullYuan)} · 下沉 ¥${r2(c.selYuan)} · 实测 ${c.obsReqs} 次`,
+        })),
+        action: `写作、审校、方案设计继续留高档模型；「${a.arch}」的检索与执行类请求走 ${a.best.name}。前提：先小批量验一次质量，别一次性全切。`,
+      });
+    }
+
+    /* 规则 8：子代理的重复上下文 */
+    const sub = AGG.sess.filter(s => s.agentsN >= 3 && s.subCredit > 0).sort((a, b) => b.subCredit - a.subCredit);
+    if (sub.length) {
+      const total = sub.reduce((a, s) => a + s.subCredit * CP_USER, 0);
+      F.push({
+        id: 'subagent', level: 'info',
+        title: '子代理花掉了多少',
+        detail: `${sub.length} 个会话派生了子代理，子代理侧消耗 ¥${r2(total)}，占这些会话的 ${((total / (sub.reduce((a, s) => a + s.yuan, 0) || 1)) * 100).toFixed(0)}%。`,
+        est: 0, tag: '结构分布',
+        evidence: sub.slice(0, 5).map(s => ({ t: s.title, v: `${s.agentsN} 个子代理 · ¥${r2(s.subCredit * CP_USER)}` })),
+        action: '并行子代理只在任务可切分时才划算；给每个子代理的 prompt 要自带完整上下文，否则它们会重复读同一批文件。',
+      });
+    }
+
+    /* 规则 9：套餐选型 —— 按月度用量找「刚好够用的最便宜档」 */
+    if (T.perMonthCredit > 0) {
+      const perMonth = T.perMonthCredit;
+      const quotes = PLANS.filter(p => p.id !== 'free').map(p => planQuote(p.id, 'y'));
+      const enough = quotes.filter(q => q.credits >= perMonth * 1.02).sort((a, b) => a.fee - b.fee);
+      const best = enough[0] || quotes[quotes.length - 1];
+      const fits = !!enough.length;
+      const wasted = best.credits - perMonth;
+      F.push({
+        id: 'plan', level: fits ? 'info' : 'mid', tag: '套餐选型',
+        title: fits ? `按你的用量，${best.plan.name} 就够（¥${best.fee.toFixed(0)}/月）` : `用量已超出旗舰版额度`,
+        detail: `本期 ${Math.round(T.days)} 天用掉 ${fmtInt(T.credit)} 积分，折合每月约 ${fmtInt(perMonth)} 积分。`
+          + (fits
+            ? `${best.plan.name} 每月 ${fmtInt(best.credits)} 积分，覆盖后仍余 ${fmtInt(wasted)}；连续包年折合 ¥${best.fee.toFixed(0)}/月，即 ¥${best.unit.toFixed(4)}/积分。`
+            : `旗舰版每月 ${fmtInt(best.credits)} 积分仍不够，需要靠多账号或企业版。`),
+        est: 0,
+        evidence: quotes.map(q => ({
+          t: q.plan.name + (q.credits >= perMonth ? ' ✓' : ' ✗'),
+          v: `¥${q.fee.toFixed(0)}/月 · ${fmtInt(q.credits)} 积分 · ¥${q.unit.toFixed(4)}/积分`,
+        })),
+        action: fits
+          ? `按连续包年买 ${best.plan.name} 最划算。别为了「保险」上更高档 —— 用不到的额度是全损的沉没成本。`
+          : `考虑把长会话拆短、降低重复读取，把月用量压到 5 万积分以内再谈套餐。`,
+      });
+    }
+
+    const order = { high: 0, mid: 1, low: 2, info: 3 };
+    F.sort((a, b) => (order[a.level] - order[b.level]) || (b.est - a.est));
+    return F;
+  }
+
+  function avgMissMinusHit(AGG) {
+    let s = 0, n = 0;
+    for (const p of AGG.pricing) if (p.pm != null) { s += (p.pm - p.ph); n++; }
+    return n ? s / n : 20;
+  }
+
+  function fmtInt(v) {
+    if (v == null) return '—';
+    if (Math.abs(v) >= 1e9) return (v / 1e9).toFixed(2) + 'B';
+    if (Math.abs(v) >= 1e6) return (v / 1e6).toFixed(2) + 'M';
+    if (Math.abs(v) >= 1e4) return (v / 1e3).toFixed(1) + 'k';
+    return String(Math.round(v));
+  }
+
+  /* ============================================================
+   * 9. 套餐口径：1 积分值多少钱，由你的实际订阅决定
+   *    官方个人版档位（2026-07 起）：体验 / 标准 / 高级 / 旗舰
+   *    实得积分 = 基础积分 + 限时加赠（加赠部分到账起 1 个月内有效）
+   * ============================================================ */
+  const PLANS = [
+    { id: 'free', name: '体验版', fee: 0, m70: 0, year: 0, credits: 500 },
+    { id: 'std', name: '标准版', fee: 99, m70: 70, year: 672, credits: 4000 },
+    { id: 'pro', name: '高级版', fee: 199, m70: 140, year: 1344, credits: 9000 },
+    { id: 'ultra', name: '旗舰版', fee: 999, m70: 700, year: 6720, credits: 50000 },
+  ];
+  const CYCLES = [
+    { id: 'm', name: '月付', mult: 1 },
+    { id: 'm7', name: '连续包月', mult: 0.707 },
+    { id: 'y', name: '连续包年', mult: 0.563 },
+  ];
+
+  function planQuote(planId, cycleId) {
+    const p = PLANS.find(x => x.id === planId);
+    if (!p) return null;
+    const cyc = CYCLES.find(c => c.id === cycleId) || CYCLES[0];
+    let fee;
+    if (p.id === 'free') fee = 0;
+    else if (cyc.id === 'm7') fee = p.m70;
+    else if (cyc.id === 'y') fee = p.year / 12;
+    else fee = p.fee;
+    return {
+      plan: p, cycle: cyc, fee, credits: p.credits,
+      unit: p.credits > 0 ? fee / p.credits : 0,           // ¥ / 积分
+      yearFee: p.id === 'free' ? 0 : (cyc.id === 'y' ? p.year : fee * 12),
+      label: p.id === 'free' ? '体验版（免费）' : `${p.name} · ${cyc.name}`,
+    };
+  }
+
+  /* ---------------- 序列化（快照 / 演示数据） ---------------- */
+  function serializeRAW(R) {
+    return {
+      v: 2, models: R.models, ws: R.ws, range: R.range, files: R.files, bytes: R.bytes,
+      lineCount: R.lineCount, badLines: R.badLines, creditRows: R.creditRows,
+      sessions: R.sessions.map(s => ({
+        id: s.id, ws: s.ws, title: s.title, titleSrc: s.titleSrc, st: s.st, en: s.en,
+        chars: s.chars, charsNew: s.charsNew, charsEdit: s.charsEdit, calls: s.calls,
+        fails: s.fails, failCredit: s.failCredit, pf: s.pf, turns: s.turns,
+        filesNew: s.filesNew.slice(), filesEdit: s.filesEdit.slice(),
+        filesTouched: s.filesTouched, dupReads: s.dupReads, readCalls: s.readCalls,
+        worstRead: s.worstRead, worstReadN: s.worstReadN,
+        fileEdits: Array.from(s.fileEdits), fileReads: Array.from(s.fileReads),
+        agents: Array.from(s.agents),
+        toolCount: s.toolCount, toolTop: s.toolTop, domModel: s.domModel,
+        arch: s.arch, modelShare: s.modelShare,
+        agentsN: s.agentsN, agentCalls: s.agentCalls,
+        genCredit: s.genCredit || 0, subCredit: s.subCredit,
+        credit: s.credit, in: s.in, hit: s.hit, out: s.out, reqs: s.reqs, durMin: s.durMin,
+        rq: s.rq.map(r => [r.ts, r.it, r.ot, r.hit, r.cw, r.cr, r.m, r.f, r.sub, r.fail]),
+      })),
+    };
+  }
+
+  function deserializeRAW(J) {
+    const sessions = (J.sessions || []).map(s => {
+      const o = Object.assign({}, s);
+      o.fileEdits = new Map(s.fileEdits || []);
+      o.fileReads = new Map(s.fileReads || []);
+      o.agents = new Map(s.agents || []);
+      o.rq = (s.rq || []).map(a => ({
+        ts: a[0], it: a[1], ot: a[2], hit: a[3], cw: a[4], cr: a[5],
+        m: a[6], f: a[7], sub: a[8] || '', fail: a[9] || 0, tid: 0,
+      }));
+      o.rq.forEach((r, i) => { r.tid = i; });
+      o.modelShare = (s.modelShare || []).map(ms => ({ m: ms.m, n: ms.n, credit: ms.credit, out: ms.out || 0, in: ms.in || 0, hit: ms.hit || 0 }));
+      return o;
+    });
+    return {
+      sessions, ws: J.ws || [], models: J.models || [], range: J.range || { min: Date.now(), max: Date.now() },
+      files: J.files || sessions.length, bytes: J.bytes || 0, lineCount: J.lineCount || 0,
+      badLines: J.badLines || 0, creditRows: J.creditRows || 0, genTools: [],
+    };
+  }
+
+  /* ---------------- 导出 ---------------- */
+  root.SL = {
+    get CREDIT_PRICE() { return CP_USER; },
+    setCreditPrice(v) { if (isFinite(v) && v >= 0) CP_USER = v; },
+    PLANS, CYCLES, planQuote, FAMILY_LIST, ARCHS, ARCH_DESC, W_DEFAULT, OFFICIAL,
+    parseLogs, aggregate, rescore, advise, prescribe, counterfactual, counterfactualSelective,
+    classifyArch, fitPricing, fmtInt, familyOf, baseName, dayKey, serializeRAW, deserializeRAW,
+    LOW_JUDGMENT,
+  };
+  if (typeof module !== 'undefined' && module.exports) module.exports = root.SL;
+})(typeof window !== 'undefined' ? window : globalThis);
+</script>
+<script>/* ============================================================
+   SpendLens Charts — 手写 SVG，无第三方依赖
+   ============================================================ */
+;(function (root) {
+  'use strict';
+  const NS = 'http://www.w3.org/2000/svg';
+
+  /* ---------------- 格式化 ---------------- */
+  const FMT = {
+    yuan(v, d) {
+      if (v == null || !isFinite(v)) return '—';
+      const a = Math.abs(v);
+      if (a >= 10000) return '¥' + (v / 1000).toFixed(0) + 'k';
+      if (a >= 100) return '¥' + v.toFixed(0);
+      if (a >= 10) return '¥' + v.toFixed(1);
+      if (a >= 1) return '¥' + v.toFixed(2);
+      if (a >= 0.01) return '¥' + v.toFixed(2);
+      return '¥' + v.toFixed(3);
+    },
+    num(v) {
+      if (v == null || !isFinite(v)) return '—';
+      const a = Math.abs(v);
+      if (a >= 1e9) return (v / 1e9).toFixed(2) + 'B';
+      if (a >= 1e6) return (v / 1e6).toFixed(2) + 'M';
+      if (a >= 1e4) return (v / 1e3).toFixed(1) + 'k';
+      if (a >= 1000) return (v / 1000).toFixed(2) + 'k';
+      return String(Math.round(v * 10) / 10);
+    },
+    int(v) { return (v == null || !isFinite(v)) ? '—' : Math.round(v).toLocaleString('zh-CN'); },
+    pct(v, d) { return (v == null || !isFinite(v)) ? '—' : (v * 100).toFixed(d == null ? 1 : d) + '%'; },
+    date(ts) { const d = new Date(ts); return d.getMonth() + 1 + '/' + d.getDate(); },
+    dateTime(ts) {
+      const d = new Date(ts);
+      const p = n => String(n).padStart(2, '0');
+      return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+    },
+    dur(min) {
+      if (!min || min < 1) return '<1 分钟';
+      if (min < 60) return Math.round(min) + ' 分钟';
+      return (min / 60).toFixed(1) + ' 小时';
+    },
+  };
+
+  /* ---------------- SVG 基础 ---------------- */
+  function svgEl(tag, attrs, parent) {
+    const e = document.createElementNS(NS, tag);
+    if (attrs) for (const k in attrs) {
+      if (attrs[k] == null) continue;
+      e.setAttribute(k, attrs[k]);
+    }
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  function cssVar(name) {
+    return getComputedStyle(document.body).getPropertyValue(name).trim();
+  }
+  function clear(host) { while (host.firstChild) host.removeChild(host.firstChild); }
+  function mkSvg(host, w, h) {
+    clear(host);
+    const s = svgEl('svg', { width: '100%', height: h, viewBox: `0 0 ${w} ${h}`, class: 'chart', preserveAspectRatio: 'xMidYMid meet' }, host);
+    return s;
+  }
+
+  /* ---------------- Tooltip ---------------- */
+  const tip = () => document.getElementById('tip');
+  function showTip(ev, html) {
+    const t = tip();
+    if (!t) return;
+    t.innerHTML = html;
+    t.classList.add('on');
+    moveTip(ev);
+  }
+  function moveTip(ev) {
+    const t = tip();
+    if (!t || !t.classList.contains('on')) return;
+    const pad = 14;
+    const r = t.getBoundingClientRect();
+    let x = ev.clientX + pad, y = ev.clientY + pad;
+    if (x + r.width > innerWidth - 8) x = ev.clientX - r.width - pad;
+    if (y + r.height > innerHeight - 8) y = ev.clientY - r.height - pad;
+    t.style.left = Math.max(6, x) + 'px';
+    t.style.top = Math.max(6, y) + 'px';
+  }
+  function hideTip() { const t = tip(); if (t) t.classList.remove('on'); }
+  function bindTip(node, htmlFn) {
+    node.addEventListener('mouseenter', e => showTip(e, htmlFn()));
+    node.addEventListener('mousemove', moveTip);
+    node.addEventListener('mouseleave', hideTip);
+  }
+
+  /* ---------------- 1. 成本构成堆叠条（标签外置，避免深浅主题对比度问题） ---------------- */
+  function costSplit(host, parts, opts) {
+    opts = opts || {};
+    const W = host.clientWidth || 800, H = 74;
+    const s = mkSvg(host, W, H);
+    const total = parts.reduce((a, p) => a + Math.max(0, p.v), 0) || 1;
+    const barY = 20, barH = 36, r = 7;
+    let x = 0;
+
+    svgEl('rect', { x: 0, y: barY, width: W, height: barH, rx: r, fill: cssVar('--line') }, s);
+
+    parts.forEach((p, i) => {
+      const w = Math.max(0, p.v) / total * W;
+      if (w < 0.5) return;
+      const g = svgEl('g', { style: 'cursor:default' }, s);
+      const isFirst = i === 0, isLast = i === parts.length - 1;
+      const rr = Math.min(r, w / 2);
+      const x0 = x, x1 = x + w;
+      let d;
+      if (isFirst && isLast) d = `M${x0 + rr},${barY}h${w - 2 * rr}a${rr},${rr} 0 0 1 0,${barH}h${-(w - 2 * rr)}a${rr},${rr} 0 0 1 0,${-barH}z`;
+      else if (isFirst) d = `M${x0 + rr},${barY}h${w - rr}v${barH}h${-(w - rr)}a${rr},${rr} 0 0 1 0,${-barH}z`;
+      else if (isLast) d = `M${x0},${barY}h${w - rr}a${rr},${rr} 0 0 1 0,${barH}h${-(w - rr)}z`;
+      else d = `M${x0},${barY}h${w}v${barH}h${-w}z`;
+      const path = svgEl('path', { d, fill: p.c, opacity: .92 }, g);
+      path.addEventListener('mouseenter', () => path.setAttribute('opacity', 1));
+      path.addEventListener('mouseleave', () => path.setAttribute('opacity', .92));
+      bindTip(g, () => `<div class="tt-h">${p.k}</div>
+        <div class="tt-r"><span>金额</span><b>${FMT.yuan(p.v)}</b></div>
+        <div class="tt-r"><span>占比</span><b>${FMT.pct(p.v / total)}</b></div>
+        <div class="tt-r"><span>${p.note || ''}</span><b>${p.n2 || ''}</b></div>`);
+      x = x1;
+    });
+
+    // 段间分隔线，避免同色系混淆
+    let acc = 0;
+    parts.forEach((p, i) => {
+      acc += Math.max(0, p.v);
+      if (i === parts.length - 1) return;
+      const xx = acc / total * W;
+      svgEl('line', { x1: xx, x2: xx, y1: barY, y2: barY + barH, stroke: cssVar('--bg'), 'stroke-width': 2 }, s);
+    });
+
+    if (opts.title) svgEl('text', { x: 0, y: 10, fill: cssVar('--t3'), 'font-size': 10.5 }, s).textContent = opts.title;
+    if (opts.right) svgEl('text', { x: W, y: 10, 'text-anchor': 'end', fill: cssVar('--t4'), 'font-size': 10.5 }, s).textContent = opts.right;
+    return s;
+  }
+
+  /* 成本构成图例（HTML，便于排版与主题切换） */
+  function costLegend(parts) {
+    const total = parts.reduce((a, p) => a + Math.max(0, p.v), 0) || 1;
+    return parts.map(p => `
+      <div style="display:flex;gap:7px;align-items:baseline;white-space:nowrap">
+        <i style="width:8px;height:8px;border-radius:2px;background:${p.c};display:inline-block;transform:translateY(-1px)"></i>
+        <span style="font-size:11px;color:var(--t2)">${p.k}</span>
+        <b style="font-size:12px;color:var(--t1);font-weight:650">${FMT.yuan(p.v)}</b>
+        <span style="font-size:10px;color:var(--t4)">${FMT.pct(p.v / total)} · ${p.n2 || ''}</span>
+      </div>`).join('');
+  }
+
+  /* ---------------- 2. 桑基图（两层） ---------------- */
+  function sankey(host, links, leftOrder, rightOrder, opts) {
+    opts = opts || {};
+    const W = host.clientWidth || 900;
+    const n = Math.max(leftOrder.length, rightOrder.length);
+    const H = opts.height || Math.max(300, Math.min(480, n * 62));
+    const s = mkSvg(host, W, H);
+    const L = leftOrder, R = rightOrder;
+    const gap = 14, nodeW = 10;
+    const xL = Math.min(170, W * 0.22), xR = W - Math.min(190, W * 0.24);
+
+    const lTot = new Map(), rTot = new Map(), total = links.reduce((a, l) => a + l.v, 0) || 1;
+    L.forEach(k => lTot.set(k, 0)); R.forEach(k => rTot.set(k, 0));
+    for (const l of links) {
+      lTot.set(l.s, (lTot.get(l.s) || 0) + l.v);
+      rTot.set(l.t, (rTot.get(l.t) || 0) + l.v);
+    }
+
+    // 每个节点保底 8px，剩余空间按金额分配 —— 否则小额节点会挤成看不见的线
+    const layout = (keys, totMap) => {
+      const minH = 8;
+      const avail = H - gap * Math.max(0, keys.length - 1);
+      const extra = Math.max(0, avail - minH * keys.length);
+      const sum = keys.reduce((a, k) => a + (totMap.get(k) || 0), 0) || 1;
+      const pos = new Map();
+      let y = 0;
+      for (const k of keys) {
+        const h = minH + (totMap.get(k) || 0) / sum * extra;
+        pos.set(k, { y, h });
+        y += h + gap;
+      }
+      return pos;
+    };
+    const lPos = layout(L, lTot), rPos = layout(R, rTot);
+
+    // 颜色：左侧模型色
+    const colorOf = new Map();
+    L.forEach((k, i) => colorOf.set(k, cssVar('--m' + (i % 8))));
+
+    // 分配链接端点
+    const lCur = new Map(L.map(k => [k, 0]));
+    const rCur = new Map(R.map(k => [k, 0]));
+    const sorted = links.slice().sort((a, b) => {
+      const ia = L.indexOf(a.s), ib = L.indexOf(b.s);
+      if (ia !== ib) return ia - ib;
+      return R.indexOf(a.t) - R.indexOf(b.t);
+    });
+
+    const g = svgEl('g', {}, s);
+    for (const l of sorted) {
+      const lp = lPos.get(l.s), rp = rPos.get(l.t);
+      if (!lp || !rp) continue;
+      const lh = lp.h * (l.v / Math.max(1e-9, lTot.get(l.s)));
+      const rh = rp.h * (l.v / Math.max(1e-9, rTot.get(l.t)));
+      const y0 = lp.y + lCur.get(l.s), y1 = rp.y + rCur.get(l.t);
+      lCur.set(l.s, lCur.get(l.s) + lh);
+      rCur.set(l.t, rCur.get(l.t) + rh);
+      const c = (xR - xL) * .42;
+      const d = `M${xL},${y0} C${xL + c},${y0} ${xR - c},${y1} ${xR},${y1}
+                 L${xR},${y1 + rh} C${xR - c},${y1 + rh} ${xL + c},${y0 + lh} ${xL},${y0 + lh} Z`;
+      const p = svgEl('path', {
+        d, fill: colorOf.get(l.s), opacity: .26, stroke: 'none',
+        style: 'transition:opacity .15s;cursor:default'
+      }, g);
+      p.addEventListener('mouseenter', () => { p.setAttribute('opacity', .6); });
+      p.addEventListener('mouseleave', () => { p.setAttribute('opacity', .26); });
+      bindTip(p, () => `<div class="tt-h">${l.s} → ${l.t}</div>
+        <div class="tt-r"><span>金额</span><b>${FMT.yuan(l.v)}</b></div>
+        <div class="tt-r"><span>占总额</span><b>${FMT.pct(l.v / total)}</b></div>`);
+    }
+
+    // 节点 + 标签
+    L.forEach(k => {
+      const p = lPos.get(k);
+      svgEl('rect', { x: xL - nodeW, y: p.y, width: nodeW, height: Math.max(2, p.h), rx: 3, fill: colorOf.get(k) }, s);
+      const cy = p.y + p.h / 2;
+      svgEl('text', {
+        x: xL - nodeW - 9, y: cy + (p.h >= 26 ? -2 : 4), 'text-anchor': 'end',
+        fill: cssVar('--t2'), 'font-size': 11.5, 'font-weight': 500
+      }, s).textContent = k.length > 19 ? k.slice(0, 18) + '…' : k;
+      if (p.h >= 26) {
+        svgEl('text', {
+          x: xL - nodeW - 9, y: cy + 14, 'text-anchor': 'end',
+          fill: cssVar('--t4'), 'font-size': 9.5
+        }, s).textContent = FMT.yuan(lTot.get(k) || 0);
+      }
+    });
+    R.forEach(k => {
+      const p = rPos.get(k);
+      svgEl('rect', { x: xR, y: p.y, width: nodeW, height: Math.max(2, p.h), rx: 3, fill: cssVar('--t3') }, s);
+      const cy = p.y + p.h / 2;
+      svgEl('text', {
+        x: xR + nodeW + 9, y: cy + (p.h >= 26 ? -2 : 4), fill: cssVar('--t1'),
+        'font-size': 11.5, 'font-weight': 500
+      }, s).textContent = k;
+      if (p.h >= 26) {
+        svgEl('text', {
+          x: xR + nodeW + 9, y: cy + 14, fill: cssVar('--t4'), 'font-size': 9.5
+        }, s).textContent = FMT.yuan(rTot.get(k) || 0) + ' · ' + FMT.pct((rTot.get(k) || 0) / total, 0);
+      }
+    });
+    return s;
+  }
+
+  /* ---------------- 3. 横向条形（项目榜） ---------------- */
+  function hbars(host, rows, opts) {
+    opts = opts || {};
+    const W = host.clientWidth || 800;
+    const rowH = opts.rowH || 34;
+    const H = rows.length * rowH + 8;
+    const s = mkSvg(host, W, H);
+    const maxV = Math.max.apply(null, rows.map(r => r.v)) || 1;
+    const logScale = opts.scale === 'log';
+    const frac = v => {
+      if (!logScale) return Math.max(0, v) / maxV;
+      const t = Math.log10(1 + Math.max(0, v)) / Math.log10(1 + maxV);
+      return 0.07 + 0.93 * Math.sqrt(t);
+    };
+    const labelW = opts.labelW || Math.min(220, W * .3);
+    const valW = 92;
+    const trackX = labelW + 8;
+    const trackW = Math.max(40, W - trackX - valW);
+
+    rows.forEach((r, i) => {
+      const y = i * rowH;
+      const g = svgEl('g', { style: 'cursor:pointer' }, s);
+      svgEl('rect', { x: 0, y: y + 2, width: W, height: rowH - 4, rx: 7, fill: 'transparent', class: 'hb-hit' }, g);
+      // 名称（有副标题时上移，副标题放下面一行）
+      const t = svgEl('text', {
+        x: 0, y: y + rowH / 2 + (r.sub ? -1 : 4), fill: cssVar('--t1'), 'font-size': 11.5, 'font-weight': 500
+      }, g);
+      t.textContent = r.k.length > 18 ? r.k.slice(0, 17) + '…' : r.k;
+      if (r.sub) {
+        svgEl('text', {
+          x: 0, y: y + rowH / 2 + 12, fill: cssVar('--t4'), 'font-size': 9.5
+        }, g).textContent = r.sub;
+      }
+      // 轨道
+      svgEl('rect', { x: trackX, y: y + rowH / 2 - 5, width: trackW, height: 10, rx: 5, fill: cssVar('--line') }, g);
+      const w = Math.max(3, frac(r.v) * trackW);
+      const bar = svgEl('rect', {
+        x: trackX, y: y + rowH / 2 - 5, width: 0, height: 10, rx: 5,
+        fill: r.c || cssVar('--teal')
+      }, g);
+      requestAnimationFrame(() => { bar.setAttribute('width', w); bar.style.transition = 'width .7s cubic-bezier(.2,.7,.3,1)'; });
+      // 值
+      svgEl('text', {
+        x: W, y: y + rowH / 2 + 4, 'text-anchor': 'end', fill: cssVar('--t1'), 'font-size': 11.5, 'font-weight': 600
+      }, g).textContent = r.vText || FMT.yuan(r.v);
+      if (opts.onClick) {
+        g.addEventListener('click', () => opts.onClick(r));
+      }
+      if (r.tip) bindTip(g, r.tip);
+    });
+    return s;
+  }
+
+  /* ---------------- 4. 四象限散点 ---------------- */
+  function scatter(host, pts, opts) {
+    opts = opts || {};
+    const W = host.clientWidth || 900;
+    const H = opts.height || 420;
+    const m = { l: 62, r: 24, t: 20, b: 44 };
+    const iw = W - m.l - m.r, ih = H - m.t - m.b;
+    const s = mkSvg(host, W, H);
+
+    const xs = pts.map(p => Math.max(1e-4, p.x));
+    const ys = pts.map(p => Math.max(1, p.y));
+    const x0 = Math.log10(Math.min.apply(null, xs)) - .15;
+    const x1 = Math.log10(Math.max.apply(null, xs)) + .15;
+    const y0 = Math.log10(Math.min.apply(null, ys)) - .15;
+    const y1 = Math.log10(Math.max.apply(null, ys)) + .15;
+    const sx = v => m.l + (Math.log10(Math.max(1e-4, v)) - x0) / (x1 - x0) * iw;
+    const sy = v => m.t + ih - (Math.log10(Math.max(1, v)) - y0) / (y1 - y0) * ih;
+
+    // 网格
+    const gGrid = svgEl('g', {}, s);
+    for (let e = Math.ceil(x0); e <= Math.floor(x1); e++) {
+      const x = m.l + (e - x0) / (x1 - x0) * iw;
+      svgEl('line', { x1: x, x2: x, y1: m.t, y2: m.t + ih, stroke: cssVar('--line'), 'stroke-dasharray': '2 4' }, gGrid);
+      svgEl('text', {
+        x, y: m.t + ih + 16, 'text-anchor': 'middle', fill: cssVar('--t4'), 'font-size': 10
+      }, gGrid).textContent = '¥' + (Math.pow(10, e) >= 1 ? Math.pow(10, e).toFixed(0) : Math.pow(10, e).toFixed(Math.min(4, -e)));
+    }
+    for (let e = Math.ceil(y0); e <= Math.floor(y1); e++) {
+      const y = m.t + ih - (e - y0) / (y1 - y0) * ih;
+      svgEl('line', { x1: m.l, x2: m.l + iw, y1: y, y2: y, stroke: cssVar('--line'), 'stroke-dasharray': '2 4' }, gGrid);
+      svgEl('text', {
+        x: m.l - 9, y: y + 3.5, 'text-anchor': 'end', fill: cssVar('--t4'), 'font-size': 10
+      }, gGrid).textContent = FMT.num(Math.pow(10, e));
+    }
+    // 轴标题
+    svgEl('text', { x: m.l + iw, y: H - 6, 'text-anchor': 'end', fill: cssVar('--t3'), 'font-size': 10.5 }, s).textContent = '花费（对数）';
+    svgEl('text', { x: 4, y: m.t + 4, fill: cssVar('--t3'), 'font-size': 10.5 }, s).textContent = '有效产出（字符）';
+
+    // 参考线：中位数
+    const med = arr => { const a = arr.slice().sort((p, q) => p - q); return a[Math.floor(a.length / 2)]; };
+    const mx = sx(med(xs)), my = sy(med(ys));
+    svgEl('line', { x1: mx, x2: mx, y1: m.t, y2: m.t + ih, stroke: cssVar('--line2'), 'stroke-dasharray': '4 4' }, s);
+    svgEl('line', { x1: m.l, x2: m.l + iw, y1: my, y2: my, stroke: cssVar('--line2'), 'stroke-dasharray': '4 4' }, s);
+
+    // 象限标注（x=花费，y=产出）
+    const ql = [
+      { x: m.l + iw - 10, y: m.t + 16, t: '明星 · 花得多也产出多', a: 'end', c: cssVar('--teal') },
+      { x: m.l + iw - 10, y: m.t + ih - 10, t: '黑洞 · 花得多产出少', a: 'end', c: cssVar('--rose') },
+      { x: m.l + 10, y: m.t + 16, t: '捡漏 · 花得少产出多', a: 'start', c: cssVar('--teal') },
+      { x: m.l + 10, y: m.t + ih - 10, t: '轻活 · 花得少产出少', a: 'start', c: cssVar('--t4') },
+    ];
+    ql.forEach(q => {
+      svgEl('text', { x: q.x, y: q.y, 'text-anchor': q.a, fill: q.c, 'font-size': 9.5, opacity: .75 }, s).textContent = q.t;
+    });
+
+    // 点
+    const gP = svgEl('g', {}, s);
+    const rMax = 17;
+    pts.forEach(p => {
+      const r = 5 + (p.v / 100) * (rMax - 5);
+      const c = svgEl('circle', {
+        cx: sx(p.x), cy: sy(p.y), r,
+        fill: p.c, opacity: .5, stroke: p.c, 'stroke-width': 1,
+        style: 'cursor:pointer;transition:opacity .15s,r .15s'
+      }, gP);
+      c.addEventListener('mouseenter', () => { c.setAttribute('opacity', .95); c.setAttribute('r', r + 3); });
+      c.addEventListener('mouseleave', () => { c.setAttribute('opacity', .5); c.setAttribute('r', r); });
+      bindTip(c, () => p.tip);
+      if (opts.onClick) c.addEventListener('click', () => opts.onClick(p));
+      p._el = c;
+    });
+    // 标签：最大价值前 3
+    const tops = pts.slice().sort((a, b) => b.v - a.v).slice(0, 3);
+    tops.forEach(p => {
+      svgEl('text', {
+        x: sx(p.x), y: sy(p.y) - (6 + p.v / 100 * 12), 'text-anchor': 'middle',
+        fill: cssVar('--t2'), 'font-size': 9.5, 'pointer-events': 'none'
+      }, s).textContent = p.label;
+    });
+    return s;
+  }
+
+  /* ---------------- 5. 24 小时柱状 ---------------- */
+  function hourBars(host, vals, opts) {
+    opts = opts || {};
+    const W = host.clientWidth || 600, H = 96;
+    const s = mkSvg(host, W, H);
+    const m = { l: 2, r: 2, t: 14, b: 18 };
+    const iw = W - m.l - m.r, ih = H - m.t - m.b;
+    const max = Math.max.apply(null, vals) || 1;
+    const bw = iw / 24;
+    const cAcc = cssVar('--teal');
+    vals.forEach((v, i) => {
+      const h = Math.max(1, v / max * ih);
+      const x = m.l + i * bw + bw * .12, w = bw * .76;
+      const g = svgEl('g', {}, s);
+      svgEl('rect', { x, y: m.t + ih - h, width: w, height: h, rx: Math.min(2, w / 2), fill: cAcc, opacity: .28 + .72 * (v / max) }, g);
+      bindTip(g, () => `<div class="tt-h">${i}:00 – ${i}:59</div><div class="tt-r"><span>消费</span><b>${FMT.yuan(v)}</b></div>`);
+      if (i % 3 === 0) {
+        svgEl('text', { x: m.l + i * bw + bw / 2, y: H - 6, 'text-anchor': 'middle', fill: cssVar('--t4'), 'font-size': 9 }, s).textContent = i;
+      }
+    });
+    svgEl('text', { x: 0, y: 9, fill: cssVar('--t3'), 'font-size': 10 }, s).textContent = opts.title || '';
+    return s;
+  }
+
+  /* ---------------- 6. 迷你甜甜圈（模型占比） ---------------- */
+  function donut(host, items, opts) {
+    opts = opts || {};
+    const W = host.clientWidth || 260, H = opts.height || 200;
+    const s = mkSvg(host, W, H);
+    const R = Math.min(W, H) / 2 - 10, r = R * .62;
+    const cx = W / 2, cy = H / 2;
+    const total = items.reduce((a, i) => a + i.v, 0) || 1;
+    let a0 = -Math.PI / 2;
+    items.forEach(it => {
+      const a1 = a0 + it.v / total * Math.PI * 2;
+      const large = (a1 - a0) > Math.PI ? 1 : 0;
+      const p = (rad, ang) => [cx + rad * Math.cos(ang), cy + rad * Math.sin(ang)];
+      const [x0, y0] = p(R, a0), [x1, y1] = p(R, a1), [x2, y2] = p(r, a1), [x3, y3] = p(r, a0);
+      const d = `M${x0},${y0} A${R},${R} 0 ${large} 1 ${x1},${y1} L${x2},${y2} A${r},${r} 0 ${large} 0 ${x3},${y3} Z`;
+      const path = svgEl('path', { d, fill: it.c, opacity: .85, style: 'cursor:default' }, s);
+      path.addEventListener('mouseenter', () => path.setAttribute('opacity', 1));
+      path.addEventListener('mouseleave', () => path.setAttribute('opacity', .85));
+      bindTip(path, () => `<div class="tt-h">${it.k}</div><div class="tt-r"><span>金额</span><b>${FMT.yuan(it.v)}</b></div><div class="tt-r"><span>占比</span><b>${FMT.pct(it.v / total)}</b></div>`);
+      a0 = a1;
+    });
+    if (opts.center) {
+      svgEl('text', { x: cx, y: cy - 2, 'text-anchor': 'middle', fill: cssVar('--t1'), 'font-size': 17, 'font-weight': 650 }, s).textContent = opts.center;
+      if (opts.centerSub) svgEl('text', { x: cx, y: cy + 15, 'text-anchor': 'middle', fill: cssVar('--t4'), 'font-size': 9.5 }, s).textContent = opts.centerSub;
+    }
+    return s;
+  }
+
+  /* ---------------- 7. 折线（日趋势） ---------------- */
+  function line(host, pts, opts) {
+    opts = opts || {};
+    const W = host.clientWidth || 800, H = opts.height || 140;
+    const m = { l: 44, r: 14, t: 12, b: 22 };
+    const s = mkSvg(host, W, H);
+    const iw = W - m.l - m.r, ih = H - m.t - m.b;
+    if (pts.length < 2) return s;
+    const max = Math.max.apply(null, pts.map(p => p.v)) || 1;
+    const sx = i => m.l + (i / (pts.length - 1)) * iw;
+    const sy = v => m.t + ih - (v / max) * ih;
+    let d = '', area = `M${m.l},${m.t + ih}`;
+    pts.forEach((p, i) => {
+      const X = sx(i), Y = sy(p.v);
+      d += (i ? 'L' : 'M') + X + ',' + Y;
+      area += `L${X},${Y}`;
+    });
+    area += `L${sx(pts.length - 1)},${m.t + ih}Z`;
+    const gid = 'lg' + Math.random().toString(36).slice(2, 7);
+    const defs = svgEl('defs', {}, s);
+    const gr = svgEl('linearGradient', { id: gid, x1: 0, y1: 0, x2: 0, y2: 1 }, defs);
+    svgEl('stop', { offset: '0%', 'stop-color': opts.color || cssVar('--teal'), 'stop-opacity': .3 }, gr);
+    svgEl('stop', { offset: '100%', 'stop-color': opts.color || cssVar('--teal'), 'stop-opacity': 0 }, gr);
+    svgEl('path', { d: area, fill: `url(#${gid})` }, s);
+    svgEl('path', { d, fill: 'none', stroke: opts.color || cssVar('--teal'), 'stroke-width': 1.6, 'stroke-linejoin': 'round' }, s);
+    svgEl('text', { x: m.l - 6, y: m.t + 4, 'text-anchor': 'end', fill: cssVar('--t4'), 'font-size': 9 }, s).textContent = FMT.num(max);
+    svgEl('text', { x: m.l - 6, y: m.t + ih, 'text-anchor': 'end', fill: cssVar('--t4'), 'font-size': 9 }, s).textContent = '0';
+    svgEl('text', { x: m.l, y: H - 5, fill: cssVar('--t4'), 'font-size': 9 }, s).textContent = pts[0].k;
+    svgEl('text', { x: W - m.r, y: H - 5, 'text-anchor': 'end', fill: cssVar('--t4'), 'font-size': 9 }, s).textContent = pts[pts.length - 1].k;
+    return s;
+  }
+
+  root.CH = { costSplit, costLegend, sankey, hbars, scatter, hourBars, donut, line, showTip, hideTip, bindTip, cssVar };
+  root.FMT = FMT;
+})(typeof window !== 'undefined' ? window : globalThis);
+</script>
+<script>/* ============================================================
+   SpendLens UI — 渲染与交互
+   ============================================================ */
+;(function (root) {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const F = root.FMT, CH = root.CH;
+
+  const ST = {
+    RAW: null, AGG: null, ADV: null, RX: null,
+    W: { d: 45, e: 35, h: 20 },
+    win: 'all', ws: '', model: '',
+    sortKey: 'credit', sortDir: -1,
+    demo: false, sim: null, simM: null, tab: 'usage',
+    plan: 'std', cycle: 'y', _defaultPlan: false,
+  };
+
+  /* 当前计费口径的说明文字：「实付」在套餐模式下其实是「分摊成本」 */
+  function basisLabel() { return ST.plan === 'credit' ? '实付' : '套餐分摊'; }
+  function planQuota(T) {
+    if (ST.plan === 'credit') return null;
+    const q = SL.planQuote(ST.plan, ST.cycle);
+    if (!q) return null;
+    const quota = q.credits * (T.days / 30.4375);
+    const periodFee = q.fee * (T.days / 30.4375);   // 这段窗口里真正掏的钱
+    return {
+      q, quota, periodFee,
+      rate: quota > 0 ? T.credit / quota : 0,
+      waste: Math.max(0, quota - T.credit) * q.unit,
+    };
+  }
+
+  /* 「省了多少」到底拿什么当成本？
+     订阅是固定支出：这 47 天你实际掏的是「月费 × 47/30.44」，不是「已用积分 × 单价」。
+     用后者会把「没用的额度」摊薄成 0 成本，导致买越贵越显得划算 —— 必须用期间实付。 */
+  function costBase(T) {
+    const pq = planQuota(T);
+    if (pq && pq.periodFee > 0) {
+      return {
+        cost: pq.periodFee, save: T.official - pq.periodFee, pq,
+        pct: T.official > 0 ? (T.official - pq.periodFee) / T.official : 0,
+        label: '期间实付',
+      };
+    }
+    return {
+      cost: T.yuan, save: T.official - T.yuan, pq: null,
+      pct: T.savePct, label: '实付',
+    };
+  }
+
+  const ARCH_C = {
+    '批量生产': '--m0', '精修迭代': '--m1', '代码勘探': '--m3', '工程执行': '--m2',
+    '联网调研': '--m5', '多智能体编排': '--m4', '轻量问答': '--m7',
+  };
+  const archColor = a => CH.cssVar(ARCH_C[a] || '--m7');
+  const modelColor = i => CH.cssVar('--m' + (i % 8));
+
+  /* ---------------- 数字滚动 ---------------- */
+  function countUp(el, target, fn) {
+    if (!el) return;
+    const dur = 620;
+    el.textContent = fn(target);          // 先落到终值：rAF 被节流时也不会停在中间帧
+    clearTimeout(el._cuT);
+    el._cuT = setTimeout(() => { el.textContent = fn(target); }, dur + 150);
+    const t0 = performance.now();
+    function step(t) {
+      const k = Math.min(1, (t - t0) / dur);
+      if (k >= 1) { el.textContent = fn(target); return; }
+      const e = 1 - Math.pow(1 - k, 3);
+      el.textContent = fn(target * e);
+      requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+
+  function toast(msg) {
+    const t = $('toast');
+    t.textContent = msg;
+    t.classList.add('on');
+    clearTimeout(t._h);
+    t._h = setTimeout(() => t.classList.remove('on'), 3200);
+  }
+
+  /* ============================================================
+   * 筛选与重算
+   * ============================================================ */
+  function buildFilter() {
+    const R = ST.RAW;
+    let from = 0, to = Infinity;
+    if (ST.win !== 'all') {
+      const anchor = R.range.max || Date.now();
+      from = anchor - (+ST.win) * 86400000;
+      to = anchor + 60000;
+    }
+    const ws = ST.ws === '' ? null : new Set([+ST.ws]);
+    const models = ST.model === '' ? null : new Set([+ST.model]);
+    return { from, to, ws, models };
+  }
+
+  function recompute() {
+    ST.AGG = SL.aggregate(ST.RAW, buildFilter());
+    SL.rescore(ST.AGG.sess, ST.W);
+    ST.ADV = SL.advise(ST.AGG);
+    ST.RX = SL.prescribe(ST.AGG);
+  }
+
+  /* ============================================================
+   * 页签：一页只显示一个面板
+   * 关键点：面板从 hidden 变可见的那一帧才量得到真实宽度，
+   * 所以含 SVG 图表的面板必须在切换时重绘，否则会是 800px 兜底宽度缩放出来的糊图。
+   * ============================================================ */
+  const TABS = ['usage', 'save', 'money', 'value', 'model', 'ledger', 'method'];
+  const TAB_CHARTS = {
+    money: A => { renderCost(A); renderSankey(A); renderProjects(A); },
+    value: A => { renderMap(A); },
+  };
+  const panelOf = t => 'panel' + t.charAt(0).toUpperCase() + t.slice(1);
+
+  function switchTab(name) {
+    if (TABS.indexOf(name) < 0) name = 'usage';
+    ST.tab = name;
+    const bar = $('tabBar');
+    if (bar) bar.querySelectorAll('.tab').forEach(b => b.classList.toggle('on', b.dataset.tab === name));
+    TABS.forEach(t => { const p = $(panelOf(t)); if (p) p.hidden = t !== name; });
+    const el = $(panelOf(name));
+    if (el) { el.classList.remove('fade'); void el.offsetWidth; el.classList.add('fade'); }
+    const sc = $('panels'); if (sc) sc.scrollTop = 0;
+    const fn = TAB_CHARTS[name];
+    if (fn && ST.AGG) requestAnimationFrame(() => fn(ST.AGG));
+  }
+
+  /* ============================================================
+   * 顶部
+   * ============================================================ */
+  function renderTop() {
+    const R = ST.RAW;
+    const isDemo = ST.demo;
+    const b = $('srcBadge');
+    b.className = 'live' + (isDemo ? ' demo' : '');
+    $('srcText').textContent = isDemo ? '脱敏演示数据' : '已接入本机日志';
+    const d0 = new Date(R.range.min), d1 = new Date(R.range.max);
+    $('rangeText').textContent = `${d0.getFullYear()}-${String(d0.getMonth() + 1).padStart(2, '0')}-${String(d0.getDate()).padStart(2, '0')} → ${String(d1.getMonth() + 1).padStart(2, '0')}-${String(d1.getDate()).padStart(2, '0')} · ${R.files} 个日志文件 · ${F.num(R.lineCount)} 行`;
+
+    // 项目下拉
+    const wsSel = $('wsSel');
+    wsSel.innerHTML = '<option value="">全部项目</option>' + R.ws.map((w, i) =>
+      `<option value="${i}">${esc(w.label)}</option>`).join('');
+    wsSel.value = ST.ws;
+
+    const mSel = $('modelSel');
+    mSel.innerHTML = '<option value="">全部模型</option>' + R.models.map((m, i) =>
+      `<option value="${i}">${esc(m)}</option>`).join('');
+    mSel.value = ST.model;
+
+    // 计费口径下拉：按积分牌价 + 三档套餐 × 三种付费周期（都带折算单价）
+    const ps = $('planSel');
+    if (ps) {
+      if (!ps.dataset.built) {
+        let h = '<option value="credit">计费口径：按积分牌价 ¥0.0500/积分</option>';
+        for (const p of SL.PLANS) {
+          h += `<optgroup label="${p.name} · 每月 ${F.int(p.credits)} 积分">`;
+          for (const c of SL.CYCLES) {
+            if (p.id === 'free' && c.id !== 'm') continue;
+            const q = SL.planQuote(p.id, c.id);
+            h += `<option value="${p.id}:${c.id}">${p.name} · ${c.name} ¥${q.fee.toFixed(0)}/月 · ¥${q.unit.toFixed(4)}/积分</option>`;
+          }
+          h += '</optgroup>';
+        }
+        ps.innerHTML = h;
+        ps.dataset.built = '1';
+      }
+      ps.value = ST.plan === 'credit' ? 'credit' : ST.plan + ':' + ST.cycle;
+    }
+  }
+
+  /* ============================================================
+   * Hero
+   * ============================================================ */
+  function renderHero(A) {
+    const T = A.T;
+    const cb = costBase(T);
+    const pq = cb.pq;
+
+    /* 标题位 = 实际 token 消费。
+       订阅制下「花了多少钱」是按下单周期摊的固定值，随用量变的是 token。
+       把 ¥ 放标题位会让人误以为它是按量计费，所以钱只出现在下面的卡片里。 */
+    $('heroEyebrow').textContent = (ST.win === 'all' ? '全部时间' : `近 ${ST.win} 天`) + ' · 实际 Token 消费';
+    const totalTok = T.in + T.out;
+    countUp($('heroMain'), totalTok, v => F.num(v));
+
+    const days = T.days || 1;
+    $('heroSub').innerHTML =
+      `<span>输入 <b>${F.num(T.in)}</b>（命中缓存 ${F.pct(T.cacheRate, 1)}）</span><span class="dot"></span>` +
+      `<span>输出 <b>${F.num(T.out)}</b></span><span class="dot"></span>` +
+      `<span><b>${F.int(T.credit)}</b> 积分</span><span class="dot"></span>` +
+      `<span><b>${F.int(T.reqs)}</b> 次请求</span><span class="dot"></span>` +
+      `<span>日均 <b>${F.num(totalTok / days)}</b></span>`;
+
+    /* ---- 省钱测算 ---- */
+    const rx = ST.RX || [];
+    const saveTotal = rx.reduce((a, f) => a + (f.est || 0), 0);
+    const byTag = {};
+    for (const f of rx) if (f.est > 0.005) byTag[f.tag] = (byTag[f.tag] || 0) + f.est;
+    const chips = Object.entries(byTag).sort((a, b) => b[1] - a[1]).slice(0, 4);
+    const share = T.official > 0 ? saveTotal / T.official : 0;   // 分母用官方等价，比例恒 ≤100%
+
+    /* 订阅制最关键的一句：省积分 ≠ 省现金，只有能降档才落袋 */
+    let cashNote = '';
+    if (pq) {
+      const cur = pq.q.plan;
+      const monthly = T.perMonthCredit;
+      const lowerOk = SL.PLANS
+        .filter(p => p.fee > 0 && p.fee < cur.fee && p.credits >= monthly)
+        .sort((a, b) => b.fee - a.fee)[0];
+      const bigger = SL.PLANS.filter(p => p.credits >= monthly).sort((a, b) => a.fee - b.fee)[0];
+      if (monthly > cur.credits) {
+        // 这个窗口的节奏已经超出现有档位：要么省，要么升
+        cashNote = `按当前节奏月化 <b>${F.int(monthly)} 积分</b>，已超出 ${cur.name} 额度 ${F.int(monthly - cur.credits)}` +
+          (bigger && bigger.id !== cur.id
+            ? `；要保住额度得升到 ${bigger.name}（<b>+¥${(bigger.fee - cur.fee).toFixed(0)}/月</b>）`
+            : `；已超过旗舰版额度`);
+      } else if (lowerOk) {
+        const lq = SL.planQuote(lowerOk.id, ST.cycle);
+        cashNote = `现金可省 <b>¥${(pq.q.fee - lq.fee).toFixed(0)}/月</b> —— 按你的月用量已能压到 ${lowerOk.name}`;
+      } else {
+        const up = SL.PLANS.filter(p => p.fee > cur.fee).sort((a, b) => a.fee - b.fee)[0];
+        cashNote = `已是最低付费档：<b>省积分不会减少支出</b>` +
+          `；月余量 ${F.int(cur.credits - monthly)} 积分，一旦超额就得升到 ${up ? up.name + ' ¥' + up.fee.toFixed(0) + '/月' : '更高档'}`;
+      }
+    }
+
+    const sv = $('heroSave');
+    if (sv) {
+      if (saveTotal > 0.05) {
+        sv.style.display = '';
+        sv.innerHTML = `
+          <div class="sv-head">
+            <span class="sv-k">${pq ? '按本报告测算 · 积分可优化' : '按本报告测算 · 可省上限'}</span>
+            <span class="sv-v">¥${saveTotal.toFixed(1)}</span>
+            <span class="sv-p">${pq ? '折算价值 · ' : ''}占官方等价 ${F.pct(share, 0)}</span>
+            <span class="sv-go">看处方 →</span>
+          </div>
+          <div class="sv-bar"><i data-w="${Math.min(100, share * 100).toFixed(1)}"></i></div>
+          <div class="sv-chips">
+            ${chips.map(([k, v]) => `<span>${esc(k)} <b>¥${v.toFixed(1)}</b></span>`).join('')}
+          </div>
+          ${cashNote ? `<div class="sv-note">${cashNote}</div>` : ''}`;
+        requestAnimationFrame(() => {
+          const bar = sv.querySelector('.sv-bar i');
+          if (bar) bar.style.width = bar.dataset.w + '%';
+        });
+        sv.onclick = () => switchTab('save');
+      } else {
+        sv.style.display = 'none';
+      }
+    }
+
+    renderHeat(A);
+    renderDaily(A);
+
+    const waste = T.failCredit * SL.CREDIT_PRICE;
+    const noOut = A.sess.filter(s => s.chars === 0).reduce((a, s) => a + s.yuan, 0);
+    const signed = v => (v < 0 ? '−' : '') + F.yuan(Math.abs(v));
+    const perK = T.chars > 0 ? cb.cost / (T.chars / 1000) : null;
+
+    const minis = [
+      {
+        k: pq ? '订阅成本 · 本期摊销' : '实际消费',
+        v: F.yuan(cb.cost),
+        s: pq
+          ? `¥${pq.q.fee.toFixed(0)}/月 × ${Math.round(T.days)} 天<br>${pq.q.plan.name} · ${pq.q.cycle.name}`
+          : `${F.int(T.credit)} 积分 × ¥${SL.CREDIT_PRICE.toFixed(4)}`,
+        cls: '',
+      },
+      {
+        k: '官方 API 等价', v: F.yuan(T.official),
+        s: `按官网牌价重算<br>覆盖 ${F.pct(T.officialCover, 1)} 积分`,
+        cls: '',
+        tip: T.officialMissing.length ? `无公开牌价未计入：${T.officialMissing.join('、')}` : '',
+      },
+      {
+        k: 'WorkBuddy 省下',
+        v: signed(cb.save),
+        s: cb.save >= 0
+          ? `相对官网牌价省 ${F.pct(cb.pct, 0)}<br>官方 ${F.yuan(T.official)} − ${cb.label} ${F.yuan(cb.cost)}`
+          : `相对官网反而多花 ${F.pct(-cb.pct, 0)}<br>官方 ${F.yuan(T.official)} − ${cb.label} ${F.yuan(cb.cost)}`,
+        cls: cb.save >= 0 ? 'good' : 'bad',
+      },
+      {
+        k: '额度使用率',
+        v: pq ? F.pct(pq.rate, 0) : '—',
+        s: pq
+          ? (pq.rate > 1
+            ? `额度 ${F.int(pq.quota)} · <b style="color:var(--rose)">超额 ${F.pct(pq.rate - 1, 0)}</b>`
+            : `额度 ${F.int(pq.quota)} · ${pq.waste > 0.5 ? '浪费 ' + F.yuan(pq.waste) : '基本用满'}`)
+          : '未绑定套餐',
+        cls: pq ? (pq.rate > 0.95 ? 'warn' : pq.rate < 0.6 ? 'bad' : 'good') : '',
+        bar: pq ? Math.min(1, pq.rate) : null,
+      },
+      {
+        k: '有效产出', v: F.num(T.chars) + ' 字',
+        s: `${F.int(T.filesNew)} 个新文件 · ${F.int(T.filesTouched)} 个文件被改`,
+        cls: '',
+      },
+      {
+        k: '单位成本', v: perK == null ? '—' : '¥' + perK.toFixed(4),
+        s: pq ? '每千字（按订阅摊销算）' : '每千字（越低越省）',
+        cls: 'good',
+      },
+      {
+        k: '缓存替你挡下', v: F.yuan(T.cacheSaving),
+        s: `命中率 ${F.pct(T.cacheRate)}，没有它这是额外账单`,
+        cls: 'info', bar: T.cacheRate,
+      },
+      {
+        k: '白烧掉', v: F.yuan(waste + noOut),
+        s: `失败调用 ¥${waste.toFixed(2)} · 零产出 ¥${noOut.toFixed(2)}`,
+        cls: 'bad',
+      },
+    ];
+    $('miniGrid').innerHTML = minis.map(m => `
+      <div class="mini ${m.cls}"${m.tip ? ` title="${esc(m.tip)}"` : ''}>
+        <div class="k">${m.k}</div>
+        <div class="v">${m.v}</div>
+        <div class="s">${m.s}</div>
+        ${m.bar != null ? `<div class="bar-mini"><i style="width:${(m.bar * 100).toFixed(1)}%"></i></div>` : ''}
+      </div>`).join('');
+  }
+
+  /* ============================================================
+   * Token 热点图：周一→周日 × 0–23 时
+   * 用对数分档上色，否则一个尖峰会把其余格子压成同色
+   * ============================================================ */
+  const WD = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+  function renderHeat(A) {
+    const host = $('heroHeat');
+    if (!host) return;
+    const g = A.heatGrid || [];
+    let max = 0, total = 0, pi = 0;
+    for (let i = 0; i < g.length; i++) {
+      total += g[i];
+      if (g[i] > max) { max = g[i]; pi = i; }
+    }
+    if (!total) { host.innerHTML = ''; return; }
+
+    const avg = total / g.length;
+    /* 用分位数分档而不是固定阈值：使用时长极度不均（夜里大片空白、白天几个尖峰），
+       固定阈值会让绝大多数格子挤在同一档。分位保证四档都有样本。 */
+    const nz = Array.from(g).filter(v => v > 0).sort((a, b) => a - b);
+    const q = p => nz[Math.min(nz.length - 1, Math.floor(p * nz.length))];
+    const b1 = q(0.25), b2 = q(0.5), b3 = q(0.75);
+    const level = v => (!v ? 0 : v <= b1 ? 1 : v <= b2 ? 2 : v <= b3 ? 3 : 4);
+    const fill = v => {
+      const L = level(v);
+      if (!L) return 'var(--line)';
+      const pct = [0, 24, 44, 68, 100][L];
+      return `color-mix(in srgb, var(--teal) ${pct}%, var(--solid))`;
+    };
+
+    const rows = WD.map((name, w) => {
+      let cells = '';
+      for (let h = 0; h < 24; h++) {
+        const v = g[w * 24 + h] || 0;
+        cells += `<i class="hc" style="background:${fill(v)}" data-v="${v}" data-w="${w}" data-h="${h}"></i>`;
+      }
+      return `<div class="hrow"><span class="hlab">${name}</span>${cells}</div>`;
+    }).join('');
+
+    const xAxis = Array.from({ length: 24 }, (_, h) =>
+      `<span>${h % 6 === 0 ? h : ''}</span>`).join('');
+
+    const pw = WD[Math.floor(pi / 24)], ph = pi % 24;
+    host.innerHTML = `
+      <div class="heat-hd">
+        <span class="heat-t">Token 热点<em>周一→周日 × 0–23 时</em></span>
+        <span class="heat-peak">峰值 ${pw} ${String(ph).padStart(2, '0')}:00 · ${F.num(g[pi])}</span>
+      </div>
+      ${rows}
+      <div class="heat-x">${xAxis}</div>
+      <div class="heat-ft">
+        <span class="heat-lg">少<span class="heat-ramp">${[0, 24, 44, 68, 100].map((p, i) =>
+          `<i style="background:${i === 0 ? 'var(--line)' : `color-mix(in srgb, var(--teal) ${p}%, var(--solid))`}"></i>`).join('')}</span>多</span>
+        <span class="heat-note">该时段累计 token，含缓存命中输入</span>
+      </div>`;
+
+    host.querySelectorAll('.hc').forEach(el => {
+      const v = +el.dataset.v, w = +el.dataset.w, h = +el.dataset.h;
+      CH.bindTip(el, () => `<div class="tt-h">${WD[w]} ${String(h).padStart(2, '0')}:00–${String(h + 1).padStart(2, '0')}:00</div>
+        <div class="tt-r"><span>Token</span><b>${F.num(v)}</b></div>
+        <div class="tt-r"><span>占全部</span><b>${F.pct(total ? v / total : 0, 2)}</b></div>
+        <div class="tt-r"><span>相对均值</span><b>${avg ? (v / avg).toFixed(2) + '×' : '—'}</b></div>`);
+    });
+  }
+
+  /* ============================================================
+   * 每日模型消耗：堆叠柱 + 7 日均线
+   * 缺失日期补 0（不跳过），否则「连续几天没干活」会被画成连续使用
+   * 只画当期真正出现过、金额 > 0 的模型，图例按模型色固定
+   * ============================================================ */
+  function renderDaily(A) {
+    const host = $('heroDaily');
+    if (!host) return;
+    const days = A.days || [];
+    const R = A.RAW;
+    if (!days.length) { host.innerHTML = ''; return; }
+
+    const byD = new Map(days.map(d => [d.d, d]));
+    const seq = [];
+    const cur = new Date(days[0].d + 'T00:00:00');
+    const endStr = days[days.length - 1].d;
+    for (let g = 0; g < 420; g++) {
+      const ss = cur.getFullYear() + '-' + String(cur.getMonth() + 1).padStart(2, '0') + '-' + String(cur.getDate()).padStart(2, '0');
+      seq.push(ss);
+      if (ss >= endStr) break;
+      cur.setDate(cur.getDate() + 1);
+    }
+
+    const nM = R.models.length;
+    const vals = seq.map(ds => {
+      const d = byD.get(ds);
+      const arr = new Array(nM).fill(0);
+      let tot = 0;
+      if (d) for (const kv of d.m) { arr[kv[0]] = kv[1]; tot += kv[1]; }
+      return { d: ds, arr, tot };
+    });
+    const active = R.models.map((n, i) => i).filter(i => vals.some(v => v.arr[i] > 0));
+    if (!active.length) { host.innerHTML = ''; return; }
+
+    let mx = 0, peak = vals[0];
+    for (const v of vals) { if (v.tot > mx) mx = v.tot; if (v.tot > peak.tot) peak = v; }
+    mx = mx || 1;
+
+    /* 日消耗极度偏斜（本机中位数 ~10 积分、峰值 3300+），线性轴下 90% 的日子是一条看不见的线。
+       偏斜超过 30 倍就切对数轴 —— 与参考看板一致，并在标题里标出来，不偷偷改口径。 */
+    const asc = vals.map(v => v.tot).sort((a, b) => a - b);
+    const med = asc[Math.floor(asc.length * 0.5)] || 0;
+    const useLog = mx / Math.max(1, med) > 30;
+    const T = v => (useLog ? Math.log10(v + 1) : v);
+    const maxT = Math.max(T(mx), 1e-9);
+
+    const W = Math.max(300, host.clientWidth || 720), H = 118;
+    const pL = 34, pR = 6, pT = 8, pB = 15;
+    const iw = W - pL - pR, ih = H - pT - pB;
+    const n = seq.length, pitch = iw / n;
+    const bw = Math.max(1.6, Math.min(16, pitch * 0.62));
+    const col = i => CH.cssVar('--m' + (i % 8));
+    const yOf = v => pT + ih - (T(v) / maxT) * ih;
+
+    let g = '';
+    const ticks = useLog
+      ? [1, 10, 100, 1000, 10000, 100000].filter(v => v <= mx)
+      : [0, mx * 0.5, mx];
+    ticks.forEach(v => {
+      const y = yOf(v);
+      g += '<line x1="' + pL + '" y1="' + y.toFixed(1) + '" x2="' + (W - pR) + '" y2="' + y.toFixed(1) +
+        '" stroke="' + CH.cssVar('--line2') + '" stroke-width="1" stroke-dasharray="2 4"/>';
+      g += '<text x="' + (pL - 6) + '" y="' + (y + 3).toFixed(1) + '" text-anchor="end" font-size="8.5" fill="' +
+        CH.cssVar('--t4') + '">' + F.int(v) + '</text>';
+    });
+
+    let bars = '';
+    vals.forEach((v, i) => {
+      const x = pL + pitch * i + (pitch - bw) / 2;
+      let cum = 0;
+      for (const mi of active) {
+        const val = v.arr[mi];
+        if (!val) continue;
+        const y1 = yOf(cum + val), y0 = yOf(cum);
+        bars += '<rect x="' + x.toFixed(1) + '" y="' + y1.toFixed(1) + '" width="' + bw.toFixed(1) +
+          '" height="' + Math.max(0.8, y0 - y1).toFixed(1) + '" fill="' + col(mi) + '" fill-opacity=".86"/>';
+        cum += val;
+      }
+    });
+
+    const ma = vals.map((_, i) => {
+      const s0 = Math.max(0, i - 6);
+      let sum = 0, c = 0;
+      for (let k = s0; k <= i; k++) { sum += vals[k].tot; c++; }
+      return sum / c;
+    });
+    const pts = ma.map((v, i) => (pL + pitch * i + pitch / 2).toFixed(1) + ',' + yOf(v).toFixed(1)).join(' ');
+    const maLine = n > 1
+      ? '<polyline points="' + pts + '" fill="none" stroke="' + CH.cssVar('--t2') +
+        '" stroke-width="1.2" stroke-opacity=".5" stroke-dasharray="4 3" pointer-events="none"/>'
+      : '';
+
+    let xl = '';
+    const step = Math.max(1, Math.ceil(n / 6));
+    vals.forEach((v, i) => {
+      if (i % step === 0 || i === n - 1) {
+        xl += '<text x="' + (pL + pitch * i + pitch / 2).toFixed(1) + '" y="' + (H - 4) +
+          '" text-anchor="middle" font-size="8.5" fill="' + CH.cssVar('--t4') + '">' + v.d.slice(5) + '</text>';
+      }
+    });
+
+    let hits = '';
+    vals.forEach((v, i) => {
+      hits += '<rect x="' + (pL + pitch * i).toFixed(1) + '" y="' + pT + '" width="' + pitch.toFixed(1) +
+        '" height="' + ih + '" fill="transparent" data-i="' + i + '"/>';
+    });
+
+    host.innerHTML =
+      '<div class="daily-hd">' +
+        '<span class="daily-t">模型消耗<em>按日堆叠 · 单位积分' + (useLog ? ' · log₁₀' : '') + '</em></span>' +
+        '<span class="daily-peak">峰值 ' + peak.d.slice(5) + ' · ' + F.int(peak.tot) + '</span>' +
+      '</div>' +
+      '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" height="' + H + '">' + g + bars + maLine + xl + hits + '</svg>' +
+      '<div class="daily-ft">' +
+        '<span class="daily-lg">' + active.map(mi =>
+          '<span><i style="background:' + col(mi) + '"></i>' + esc(R.models[mi]) + '</span>').join('') + '</span>' +
+        '<span class="daily-note">虚线为 7 日均 · 悬停看当日明细</span>' +
+      '</div>';
+
+    host.querySelectorAll('svg rect[data-i]').forEach(el => {
+      const v = vals[+el.dataset.i];
+      CH.bindTip(el, () => {
+        const rows = active.map(mi => ({ n: R.models[mi], v: v.arr[mi] }))
+          .filter(o => o.v > 0).sort((a, b) => b.v - a.v);
+        return '<div class="tt-h">' + v.d + '</div>' +
+          '<div class="tt-r"><span>合计</span><b>' + F.int(v.tot) + ' 积分</b></div>' +
+          (rows.length ? rows.map(o =>
+            '<div class="tt-r"><span>' + esc(o.n) + '</span><b>' + F.int(o.v) +
+            '（' + F.pct(o.v / (v.tot || 1), 0) + '）</b></div>').join('')
+            : '<div class="tt-r"><span>当日</span><b>无请求</b></div>');
+      });
+    });
+  }
+
+  /* ============================================================
+   * KPI
+   * ============================================================ */
+  function renderKpis(A) {
+    const T = A.T;
+    const items = [
+      ['请求次数', F.int(T.reqs), `平均每次 ${F.num(T.reqs ? (T.in + T.out) / T.reqs : 0)} token`],
+      ['会话数', F.int(A.sess.length), `平均 ${(T.reqs / Math.max(1, A.sess.length)).toFixed(0)} 次/会话`],
+      ['项目数', F.int(A.byWs.length), `最贵：${A.byWs[0] ? A.byWs[0].label : '—'}`],
+      ['平均上下文', F.num(T.avgIn), '每次请求带入的输入 token'],
+      ['缓存命中率', F.pct(T.cacheRate), '输入里命中缓存的比例'],
+      ['输出占比', F.pct(T.outputShare), '输出 token / 全部 token'],
+      ['工具失败率', F.pct(T.calls ? T.fails / T.calls : 0), `${T.fails} 次非零退出`],
+      ['重复读取', F.int(T.dupReads), '同一文件被重复读的次数'],
+    ];
+
+    // 计费口径：套餐模式下给出折算单价与额度使用率（这才是订阅用户真正关心的）
+    const pq = planQuota(T);
+    if (pq) {
+      items.push(['套餐折算单价', '¥' + pq.q.unit.toFixed(4),
+        `${pq.q.plan.name} · ${pq.q.cycle.name} · ¥${pq.q.fee.toFixed(0)}/月`]);
+      items.push(['额度使用率', F.pct(pq.rate, 0),
+        `额度 ${F.int(pq.quota)}（${Math.round(T.days)} 天折算）· ` +
+        (pq.waste > 0.5 ? `浪费 ≈ ¥${pq.waste.toFixed(0)}` : '基本用满')]);
+    } else {
+      items.push(['积分牌价', '¥0.0500', '未选套餐，按名义牌价折算']);
+    }
+
+    $('kpis').innerHTML = items.map(([k, v, s]) => `
+      <div class="kpi"><div class="k">${k}</div><b>${v}</b><div class="s">${s}</div></div>`).join('');
+  }
+  /* ============================================================
+   * 洞察
+   * ============================================================ */
+  function renderInsights(A) {
+    const T = A.T;
+    const cs = T.costSplit;
+    const out = [];
+
+    // 1. 成本结构
+    const missShare = cs.miss / Math.max(1e-9, T.yuan);
+    const hitShare = cs.hit / Math.max(1e-9, T.yuan);
+    const outShare = cs.out / Math.max(1e-9, T.yuan);
+    out.push({
+      c: '', ic: '◧', t: '钱到底买了什么',
+      m: `输出只占账单的 <b>${F.pct(outShare)}</b>（${F.yuan(cs.out)}），读入占 <b>${F.pct(1 - outShare)}</b>。其中缓存读取 ${F.pct(hitShare)}、未命中输入 ${F.pct(missShare)} —— 你付的钱主要是「让它反复读」。`,
+    });
+
+    // 2. 模型结构错配
+    const bm = A.byModel;
+    if (bm.length > 1) {
+      const main = bm.slice().sort((a, b) => b.reqs - a.reqs)[0];
+      const mainUnit = main.credit / Math.max(1, main.reqs);
+      const expensive = bm.slice()
+        .filter(m => m.reqs >= 5)
+        .sort((a, b) => (b.credit / Math.max(1, b.reqs)) - (a.credit / Math.max(1, a.reqs)))[0];
+      if (expensive && expensive.m !== main.m) {
+        out.push({
+          c: 'b', ic: '⇅', t: '模型结构',
+          m: `<b>${A.RAW.models[expensive.m]}</b> 只跑了 ${F.pct(expensive.reqs / Math.max(1, T.reqs))} 的请求，却吃掉 <b>${F.pct(expensive.credit / Math.max(1e-9, T.credit))}</b> 的预算。单次成本是主力模型 ${A.RAW.models[main.m]} 的 <b>${(expensive.credit / Math.max(1, expensive.reqs) / Math.max(1e-9, mainUnit)).toFixed(0)} 倍</b>。`,
+        });
+      }
+    }
+
+    // 3. 效率鸿沟：只在同一任务原型内部比较，避免拿轻活比重活
+    let gap = null;
+    for (const a of A.byArch) {
+      const ss = A.sess.filter(s => s.arch === a.arch && s.chars >= 5000 && s.yuan >= 0.05);
+      if (ss.length < 3) continue;
+      const arr = ss.map(s => ({ s, v: s.chars / s.yuan })).sort((x, y) => y.v - x.v);
+      const ratio = arr[0].v / Math.max(1, arr[arr.length - 1].v);
+      if (!gap || ratio > gap.ratio) gap = { arch: a.arch, arr, ratio, n: ss.length };
+    }
+    if (gap) {
+      const hi = gap.arr[0], lo = gap.arr[gap.arr.length - 1];
+      out.push({
+        c: '', ic: '⇢', t: '同类任务里的效率鸿沟',
+        m: `在「${gap.arch}」这 ${gap.n} 个会话里，最省的每 1 元买到 <b>${F.num(hi.v)} 字</b>，最费的只有 <b>${F.num(lo.v)} 字</b> —— 差 <b>${gap.ratio.toFixed(1)} 倍</b>。同样的活，成本可以差一个量级。`,
+      });
+    }
+
+    // 4. 缓存依赖
+    out.push({
+      c: 'v', ic: '⛁', t: '你最脆弱的地方',
+      m: `缓存命中 <b>${F.pct(T.cacheRate)}</b>，按未命中价重算这张账单会变成 <b>${F.yuan(T.yuan + T.cacheSaving)}</b>（现在是 ${F.yuan(T.yuan)}）。中途切模型、改系统提示，都会让缓存前缀失效。`,
+    });
+
+    // 5. 峰值
+    const topDay = A.days.slice().sort((a, b) => b.credit - a.credit)[0];
+    const topSess = A.sess.slice().sort((a, b) => b.credit - a.credit)[0];
+    if (topDay && topSess) {
+      out.push({
+        c: 'w', ic: '◈', t: '最贵的一天与最贵的会话',
+        m: `<b>${topDay.d}</b> 一天花掉 ${F.yuan(topDay.credit * SL.CREDIT_PRICE)}；最贵的会话「${esc(topSess.title.slice(0, 22))}」花了 <b>${F.yuan(topSess.yuan)}</b>，产出 ${F.num(topSess.chars)} 字。`,
+      });
+    }
+
+    $('insights').innerHTML = out.map(i => `
+      <div class="ins ${i.c}"><div class="ic">${i.ic}</div><div><div class="t">${i.t}</div><div class="m">${i.m}</div></div></div>`).join('');
+  }
+
+  /* ============================================================
+   * 01-A 成本构成
+   * ============================================================ */
+  function renderCost(A) {
+    const T = A.T, cs = T.costSplit;
+    const parts = [
+      { k: '缓存读取', v: cs.hit, c: CH.cssVar('--m0'), note: '命中缓存', n2: F.num(T.hit) + ' tok' },
+      { k: '未命中输入', v: cs.miss, c: CH.cssVar('--m2'), note: '全价输入', n2: F.num(T.in - T.hit) + ' tok' },
+      { k: '输出', v: cs.out, c: CH.cssVar('--m1'), note: '生成', n2: F.num(T.out) + ' tok' },
+    ];
+    if (cs.other > 0.01) parts.push({ k: '其他', v: cs.other, c: CH.cssVar('--t3'), note: '生成类工具/牌价兜底', n2: '' });
+
+    $('costCard').innerHTML = `
+      <div class="sec" style="margin:0 0 6px">
+        <h2 style="font-size:12.5px">成本构成 <span class="badge">按反解单价拆分</span></h2>
+        <span class="note">合计 ${F.yuan(T.yuan)} · ${F.int(T.credit)} 积分</span>
+      </div>
+      <div id="costBar"></div>
+      <div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:6px" id="costLegend"></div>
+      <div class="two" style="margin-top:20px">
+        <div>
+          <div class="note" style="margin-bottom:6px">钱花在哪个动作上</div>
+          <div id="toolBars"></div>
+        </div>
+        <div>
+          <div class="note" style="margin-bottom:6px">一天里什么时候最费钱</div>
+          <div id="hourBars"></div>
+          <div class="foot" id="hourNote"></div>
+        </div>
+      </div>`;
+
+    CH.costSplit($('costBar'), parts, {
+      title: '', right: `缓存命中 ${F.pct(T.cacheRate)} · 输出占比 ${F.pct(T.outputShare)}`,
+    });
+    $('costLegend').innerHTML = CH.costLegend(parts);
+
+    // 工具族
+    const famColors = { '执行': '--m2', '勘探': '--m3', '精修': '--m1', '创作': '--m0', '调研': '--m5', '编排': '--m4', '管理': '--m7', '交付': '--m7', '工具': '--m7', '应答': '--m6' };
+    const rows = A.byTool.filter(t => t.credit > 0.001).slice(0, 8).map(t => ({
+      k: t.f, v: t.credit * SL.CREDIT_PRICE,
+      c: CH.cssVar(famColors[t.f] || '--m7'),
+      sub: `${t.reqs} 次 · ${F.pct(t.reqs / Math.max(1, T.reqs), 0)}`,
+      tip: () => `<div class="tt-h">${t.f}类动作</div>
+        <div class="tt-r"><span>花费</span><b>${F.yuan(t.credit * SL.CREDIT_PRICE)}</b></div>
+        <div class="tt-r"><span>请求</span><b>${F.int(t.reqs)}</b></div>
+        <div class="tt-r"><span>平均每次</span><b>${F.yuan(t.credit * SL.CREDIT_PRICE / Math.max(1, t.reqs))}</b></div>`,
+    }));
+    CH.hbars($('toolBars'), rows, { rowH: 34, labelW: 80 });
+
+    // 小时
+    const hrs = new Array(24).fill(0);
+    for (let i = 0; i < 7; i++) for (let h = 0; h < 24; h++) hrs[h] += A.hourGrid[i * 24 + h];
+    CH.hourBars($('hourBars'), hrs.map(v => v * SL.CREDIT_PRICE), { title: '按小时汇总（周一到周日合计）' });
+    const peak = hrs.indexOf(Math.max.apply(null, hrs));
+    $('hourNote').innerHTML = `峰值时段 <b style="color:var(--t2)">${peak}:00–${(peak + 1) % 24}:00</b>，占全天 ${F.pct(hrs[peak] / Math.max(1, hrs.reduce((a, b) => a + b, 0)))}。深夜的会话往往上下文最长。`;
+  }
+
+  /* ============================================================
+   * 01-B 桑基
+   * ============================================================ */
+  function renderSankey(A) {
+    const links = [];
+    const lTot = new Map(), rTot = new Map();
+    for (const s of A.sess) {
+      s.modelShare.forEach(ms => {
+        const v = ms.credit * SL.CREDIT_PRICE;
+        if (v <= 0.0005) return;
+        links.push({ s: A.RAW.models[ms.m], t: s.arch, v });
+        lTot.set(A.RAW.models[ms.m], (lTot.get(A.RAW.models[ms.m]) || 0) + v);
+        rTot.set(s.arch, (rTot.get(s.arch) || 0) + v);
+      });
+    }
+    const totalV = links.reduce((a, l) => a + l.v, 0) || 1;
+    const top = (map) => {
+      const arr = [...map.entries()].sort((a, b) => b[1] - a[1]);
+      // 只保留占比 ≥2% 的节点，其余并成「其他」——避免出现一堆看不见的细线
+      const head = arr.filter(x => x[1] / totalV >= 0.02).slice(0, 5).map(x => x[0]);
+      const headSet = new Set(head);
+      const rest = arr.filter(x => !headSet.has(x[0])).reduce((a, x) => a + x[1], 0);
+      return { head: rest / totalV >= 0.005 ? head.concat(['其他']) : head };
+    };
+    const L = top(lTot).head, R = top(rTot).head;
+    const Lset = new Set(L), Rset = new Set(R);
+    const merged = new Map();
+    for (const l of links) {
+      const s2 = Lset.has(l.s) ? l.s : '其他';
+      const t2 = Rset.has(l.t) ? l.t : '其他';
+      const k = s2 + '\u0000' + t2;
+      merged.set(k, (merged.get(k) || 0) + l.v);
+    }
+    const keep = [...merged.entries()].map(([k, v]) => {
+      const [s2, t2] = k.split('\u0000');
+      return { s: s2, t: t2, v };
+    });
+
+    $('sankeyCard').innerHTML = `
+      <div class="sec" style="margin:0 0 8px">
+        <h2 style="font-size:12.5px">钱从哪个模型流向哪类任务</h2>
+        <span class="note">带宽 = 金额；左侧模型，右侧任务原型</span>
+      </div>
+      <div id="sankeyHost"></div>
+      <div class="foot">读法：一条带子越粗，说明这类任务越依赖这个模型。如果某个便宜模型承担了大带宽，说明那块工作本来就不需要贵模型。</div>`;
+    if (keep.length) CH.sankey($('sankeyHost'), keep, L, R, {});
+    else $('sankeyHost').innerHTML = '<div class="empty">当前筛选下没有可展示的流向</div>';
+  }
+
+  /* ============================================================
+   * 01-C 项目榜
+   * ============================================================ */
+  function renderProjects(A) {
+    const T = A.T;
+    const rows = A.byWs.slice(0, 10).map(w => ({
+      k: w.label, v: w.credit * SL.CREDIT_PRICE,
+      sub: `${w.sess.length} 个会话 · ${F.num(w.chars)} 字 · ${w.chars > 0 ? '¥' + (w.credit * SL.CREDIT_PRICE / (w.chars / 1000)).toFixed(3) + '/千字' : '无产出'}`,
+      tip: () => `<div class="tt-h">${esc(w.label)}</div>
+        <div class="tt-r"><span>花费</span><b>${F.yuan(w.credit * SL.CREDIT_PRICE)}</b></div>
+        <div class="tt-r"><span>占总额</span><b>${F.pct(w.credit / Math.max(1e-9, T.credit))}</b></div>
+        <div class="tt-r"><span>会话 / 请求</span><b>${w.sess.length} / ${F.int(w.reqs)}</b></div>
+        <div class="tt-r"><span>产出</span><b>${F.num(w.chars)} 字</b></div>`,
+    }));
+    $('projectCard').innerHTML = `
+      <div class="sec" style="margin:0 0 8px">
+        <h2 style="font-size:12.5px">项目消耗榜</h2>
+        <span class="note">${A.byWs.length} 个项目 · 最高占 ${F.pct((A.byWs[0] ? A.byWs[0].credit : 0) / Math.max(1e-9, T.credit))}</span>
+      </div>
+      <div id="projBars"></div>
+      <div class="foot">「¥/千字」把花费摊到实际写出来的字数上，是跨项目比较的唯一公平尺子 —— 不同项目的会话长度差别极大，只比总额会误判。<b>条长为对数刻度</b>，否则头部项目会把其余全部压成一条线；精确金额见右侧数字。</div>`;
+    if (rows.length) CH.hbars($('projBars'), rows, { rowH: 38, scale: 'log', labelW: Math.min(240, $('projBars').clientWidth * .28) });
+    else $('projBars').innerHTML = '<div class="empty">无数据</div>';
+  }
+
+  /* ============================================================
+   * 02-A 价值地图
+   * ============================================================ */
+  function renderMap(A) {
+    const pts = A.sess.filter(s => s.yuan > 0).map(s => ({
+      s, x: Math.max(0.002, s.yuan), y: Math.max(10, s.chars),
+      v: s.value, c: archColor(s.arch), label: s.title.slice(0, 12),
+      tip: `<div class="tt-h">${esc(s.title.slice(0, 40))}</div>
+        <div class="tt-r"><span>原型</span><b>${s.arch}</b></div>
+        <div class="tt-r"><span>花费</span><b>${F.yuan(s.yuan)}</b></div>
+        <div class="tt-r"><span>产出</span><b>${F.num(s.chars)} 字</b></div>
+        <div class="tt-r"><span>¥/千字</span><b>${s.perK == null ? '—' : '¥' + s.perK.toFixed(3)}</b></div>
+        <div class="tt-r"><span>价值分</span><b>${s.value.toFixed(1)}</b></div>
+        <div class="tt-r" style="color:var(--t4);margin-top:4px">点击看证据链 →</div>`,
+    }));
+    const arches = [...new Set(pts.map(p => p.s.arch))];
+    $('mapCard').innerHTML = `
+      <div class="sec" style="margin:0 0 8px">
+        <h2 style="font-size:12.5px">每个会话的位置</h2>
+        <div class="legend">${arches.map(a => `<span><i style="background:${archColor(a)}"></i>${a}</span>`).join('')}</div>
+      </div>
+      <div id="mapHost"></div>
+      <div class="foot">气泡大小 = 综合价值分。虚线是中位数分界：右上角「花得多也产出多」是健康的，右下角「花得多产出少」要重点看。纯咨询类会话产出为 0，会贴在底边。</div>`;
+    if (pts.length) CH.scatter($('mapHost'), pts, {
+      height: 420,
+      onClick: p => openDrawer(p.s),
+    });
+    else $('mapHost').innerHTML = '<div class="empty">无数据</div>';
+  }
+
+  /* ============================================================
+   * 02-B 排行 + 权重
+   * ============================================================ */
+  function renderRank(A) {
+    const sess = A.sess.slice().sort((a, b) => b.value - a.value);
+    const top = sess.slice(0, 6);
+    const effSorted = A.sess.filter(s => s.chars > 500 && s.yuan > 0.01).sort((a, b) => (b.chars / b.yuan) - (a.chars / a.yuan));
+    const best = effSorted.slice(0, 4);
+    const worst = effSorted.slice(-4).reverse();
+
+    const rowHtml = (s, extra) => `
+      <div class="it" data-sid="${esc(s.id)}" style="cursor:pointer">
+        <span>${esc(s.title.slice(0, 26))}</span>
+        <span>${extra}</span>
+      </div>`;
+
+    $('rankCard').innerHTML = `
+      <div class="sec" style="margin:0 0 12px">
+        <h2 style="font-size:12.5px">价值评分 <span class="badge t">权重可调</span></h2>
+        <span class="note">拖动滑块，排名会实时重算 —— 我们不假装权重是唯一真理</span>
+      </div>
+      <div class="sliders">
+        <div class="sl"><label><span>交付力 D</span><b id="wDv">${ST.W.d}</b></label>
+          <input type="range" id="wD" min="0" max="100" value="${ST.W.d}"></div>
+        <div class="sl"><label><span>效率 E</span><b id="wEv">${ST.W.e}</b></label>
+          <input type="range" id="wE" min="0" max="100" value="${ST.W.e}"></div>
+        <div class="sl"><label><span>健康 H</span><b id="wHv">${ST.W.h}</b></label>
+          <input type="range" id="wH" min="0" max="100" value="${ST.W.h}"></div>
+      </div>
+      <div class="two" style="margin-top:18px">
+        <div>
+          <div class="note" style="margin-bottom:6px">综合价值 TOP</div>
+          <div class="dlist" id="topList">
+            ${top.map(s => rowHtml(s, `<b style="color:var(--teal)">${s.value.toFixed(1)}</b> <span style="color:var(--t4)">· ¥${s.yuan.toFixed(2)}</span>`)).join('') || '<div class="empty">无</div>'}
+          </div>
+        </div>
+        <div>
+          <div class="note" style="margin-bottom:6px">性价比两端（字/元）</div>
+          <div class="dlist">
+            ${best.map(s => rowHtml(s, `<b style="color:var(--teal)">${F.num(s.chars / s.yuan)}字/元</b>`)).join('')}
+            ${worst.map(s => rowHtml(s, `<b style="color:var(--rose)">${F.num(s.chars / s.yuan)}字/元</b>`)).join('')}
+          </div>
+        </div>
+      </div>
+      <div class="foot">D 交付力：有没有真的落盘产出（对数尺度）。E 效率：单位成本相对本批中位数。H 健康：失败率、重复读取、上下文膨胀。<b>纯问答会话因无落盘产出，D 天然偏低 —— 这不代表它没用，只说明它不产生可复用的资产。</b></div>`;
+
+    const bind = () => {
+      const upd = () => {
+        ST.W = { d: +$('wD').value, e: +$('wE').value, h: +$('wH').value };
+        $('wDv').textContent = ST.W.d; $('wEv').textContent = ST.W.e; $('wHv').textContent = ST.W.h;
+        SL.rescore(A.sess, ST.W);
+        try { localStorage.setItem('sl.w', JSON.stringify(ST.W)); } catch (e) {}
+        const s2 = A.sess.slice().sort((a, b) => b.value - a.value).slice(0, 6);
+        $('topList').innerHTML = s2.map(s => rowHtml(s, `<b style="color:var(--teal)">${s.value.toFixed(1)}</b> <span style="color:var(--t4)">· ¥${s.yuan.toFixed(2)}</span>`)).join('');
+        bindRows();
+      };
+      ['wD', 'wE', 'wH'].forEach(id => { $(id).oninput = upd; });
+    };
+    const bindRows = () => {
+      document.querySelectorAll('#rankCard .it').forEach(el => {
+        el.onclick = () => {
+          const s = A.sess.find(x => x.id === el.dataset.sid);
+          if (s) openDrawer(s);
+        };
+      });
+    };
+    bind(); bindRows();
+  }
+
+  /* ============================================================
+   * 03-A 实测单价
+   * ============================================================ */
+  function renderPrice(A) {
+    const rows = A.pricing.filter(p => p.n > 0).map(p => {
+      const col = modelColor(p.m);
+      return `<tr>
+        <td class="l"><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${col};margin-right:7px"></span>${esc(p.name)}</td>
+        <td>${F.int(p.n)}</td>
+        <td>${p.pm == null ? '—' : p.pm.toFixed(1)}</td>
+        <td>${p.ph == null ? '—' : p.ph.toFixed(2)}</td>
+        <td>${p.po == null ? '—' : p.po.toFixed(0)}</td>
+        <td>${p.po == null ? '—' : '¥' + (p.po * SL.CREDIT_PRICE).toFixed(2)}</td>
+        <td><span class="badge ${p.src === '实测拟合' ? 't' : 'a'}">${p.src}</span></td>
+        <td>${p.r2 ? p.r2.toFixed(3) : '—'}</td>
+      </tr>`;
+    }).join('');
+
+    $('priceCard').innerHTML = `
+      <div class="sec" style="margin:0 0 8px">
+        <h2 style="font-size:12.5px">单价反解 <span class="badge">最小二乘</span></h2>
+        <span class="note">用 ${F.int(A.T.reqs)} 条真实账单拟合 credit = 单价 × token</span>
+      </div>
+      <div class="tbl-wrap"><table>
+        <thead><tr>
+          <th class="l">模型</th><th>样本</th><th>未命中输入</th><th>缓存命中</th><th>输出</th><th>输出折¥</th><th>来源</th><th>R²</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>
+      <div class="foot">
+        单位：<b>积分 / 百万 token</b>（最后一列按 ¥0.05/积分折算，仅供体感）。<br>
+        「实测拟合」= 从你自己的 credit 字段反解，R² 越接近 1 越可信；R² 低说明该模型请求的 token 结构太单一，无法分离三个系数，此时回退到官方牌价。<br>
+        <b>所有推荐结论只用积分比较，不依赖 ¥ 汇率假设</b> —— 即使 ¥0.05 这个换算不准，模型之间的相对结论依然成立。
+      </div>`;
+  }
+
+  /* ============================================================
+   * 03-B 顾问
+   * ============================================================ */
+  function renderAdvice(A) {
+    const adv = ST.ADV || [];
+    let usable = adv.filter(a => a.best && a.credit > 0.02 && a.saveSelYuan >= 0.02);
+    if (!usable.length) usable = adv.filter(a => a.best && a.credit > 0.02);
+    const totalSave = usable.reduce((x, a) => x + a.saveSelYuan, 0);
+
+    const rows = usable.slice(0, 6).map(a => {
+      const cur = a.credit * SL.CREDIT_PRICE;
+      const mx = Math.max(cur, a.best.selYuan, a.best.fullYuan, 1e-9);
+      const bar = (v, c, label) => `
+        <div class="advbar">
+          <span>${label}</span>
+          <div class="track"><div class="fill" style="width:${(v / mx * 100).toFixed(1)}%;background:${c}"></div></div>
+          <span style="text-align:right">¥${v.toFixed(2)}</span>
+        </div>`;
+      const stars = '★'.repeat(Math.max(1, a.conf)) + '☆'.repeat(3 - Math.max(1, a.conf));
+      return `<div class="advrow">
+        <div class="an">
+          ${esc(a.arch)}
+          <small>${a.n} 个会话 · ${F.int(a.reqs)} 次请求</small>
+          <small class="conf" title="置信度：样本量 × 可比较模型数">${stars} <span style="color:var(--t4);letter-spacing:0">${a.conf >= 3 ? '结论稳' : a.conf === 2 ? '可参考' : '样本偏少'}</span></small>
+        </div>
+        <div class="bars">
+          ${bar(cur, CH.cssVar('--rose'), '现在')}
+          ${bar(a.best.selYuan, CH.cssVar('--cyan'), '保守下沉')}
+          ${bar(a.best.fullYuan, CH.cssVar('--teal'), '全量替换')}
+          <div style="font-size:10px;color:var(--t4);margin-top:2px">下沉目标：<b style="color:var(--t2)">${esc(a.best.name)}</b>${a.kept ? '（与现用量最大模型优势不足 8%，保持现状）' : ''}</div>
+        </div>
+        <div class="save">
+          <b>−¥${a.saveSelYuan.toFixed(2)}</b>
+          <small>省 ${F.pct(a.pctSel, 0)}${a.saveFullYuan > a.saveSelYuan ? ` · 全量可省 ¥${a.saveFullYuan.toFixed(2)}` : ''}</small>
+        </div>
+      </div>`;
+    }).join('');
+
+    $('adviceCard').innerHTML = `
+      <div class="sec" style="margin:0 0 8px">
+        <h2 style="font-size:12.5px">按任务类型给建议</h2>
+        <span class="note">合计可省 <b style="color:var(--teal)">¥${totalSave.toFixed(2)}</b>（占本期 ${F.pct(totalSave / Math.max(0.01, A.T.yuan))}）</span>
+      </div>
+      <div class="adv">${rows || '<div class="empty">样本不足，无法给出可靠建议</div>'}</div>
+      <div class="foot">
+        <b>保守下沉</b> = 只把「勘探/执行/调研/管理」这类低判断力请求换到便宜模型，写作与审校留在原模型 —— 这是推荐做法。<br>
+        <b>全量替换</b> = 整个会话都换，省得更多但质量风险实在，只作对照。<br>
+        候选模型必须在该任务类型下真实跑过至少 8 次才纳入比较（标「待验证」的不计入节约估算）。这是为了防止拿一个从没干过这活儿的模型来「证明」便宜。
+      </div>`;
+  }
+
+  /* ============================================================
+   * 03-C 反事实模拟器
+   * ============================================================ */
+  function renderSim(A) {
+    const sess = A.sess.slice().sort((a, b) => b.credit - a.credit);
+    if (!sess.length) { $('simCard').innerHTML = '<div class="empty">无数据</div>'; return; }
+    const sid = ST.sim || sess[0].id;
+    const s = sess.find(x => x.id === sid) || sess[0];
+    const priced = A.pricing.filter(p => p.pm != null);
+    const curM = s.domModel;
+    // 目标模型：优先用户显式选择，其次该原型顾问推荐的，最后取最便宜的替代
+    let target = ST.simM != null ? priced.find(p => p.m === ST.simM) : null;
+    if (!target) {
+      const advRow = (ST.ADV || []).find(a => a.arch === s.arch && a.best && a.best.m !== curM);
+      target = advRow ? priced.find(p => p.m === advRow.best.m) : null;
+    }
+    if (!target) {
+      const alt = priced.filter(p => p.m !== curM).sort((a, b) => a.po - b.po);
+      target = alt[0] || priced[0];
+    }
+
+    const full = SL.counterfactual(s, A.pricing, target.m);
+    const sel = SL.counterfactualSelective(s, A.pricing, target.m);
+
+    $('simCard').innerHTML = `
+      <div class="sec" style="margin:0 0 10px">
+        <h2 style="font-size:12.5px">反事实模拟器 <span class="badge v">挑一个会话算账</span></h2>
+        <span class="note">同样的 token 结构，换个模型要花多少</span>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+        <select id="simSess" style="flex:1;min-width:240px">
+          ${sess.slice(0, 40).map(x => `<option value="${esc(x.id)}" ${x.id === sid ? 'selected' : ''}>${esc(x.title.slice(0, 34))} · ¥${x.yuan.toFixed(2)}</option>`).join('')}
+        </select>
+        <select id="simModel" style="min-width:180px">
+          ${priced.map(p => `<option value="${p.m}" ${p.m === target.m ? 'selected' : ''}>换成 ${esc(p.name)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="three" style="gap:12px">
+        <div class="mini"><div class="k">当前花费</div><div class="v">${F.yuan(s.yuan)}</div><div class="s">${F.int(s.reqs)} 次请求 · ${F.num(s.chars)} 字</div></div>
+        <div class="mini ${sel && sel.deltaYuan < 0 ? 'good' : 'warn'}"><div class="k">保守下沉（低判断力请求换模型）</div>
+          <div class="v">${sel ? F.yuan(sel.yuan) : '—'}</div>
+          <div class="s">${sel ? (sel.deltaYuan <= 0 ? '省 ' : '多花 ') + F.yuan(Math.abs(sel.deltaYuan)) + ` · 换 ${sel.switched} 条 / 保 ${sel.kept} 条` : '—'}</div></div>
+        <div class="mini ${full && full.deltaYuan < 0 ? 'good' : 'warn'}"><div class="k">全量替换</div>
+          <div class="v">${full ? F.yuan(full.yuan) : '—'}</div>
+          <div class="s">${full ? (full.deltaYuan <= 0 ? '省 ' : '多花 ') + F.yuan(Math.abs(full.deltaYuan)) + ` · ${F.pct(Math.abs(full.pct), 0)}` : '该模型无可用单价'}</div></div>
+      </div>
+      <div class="foot">
+        计算方式：把这个会话的真实 token 结构（未命中输入 / 缓存命中 / 输出）套到目标模型的实测单价上。
+        <b>这不是预测，是同结构外推</b>：它假设换了模型后缓存行为、输出长度都不变，实际会有偏差。
+        单价来源：${esc((full && full.src) || '—')}${full && full.src === '实测拟合' ? `（R²=${full.r2.toFixed(3)}）` : ''}。
+      </div>`;
+
+    $('simSess').onchange = e => { ST.sim = e.target.value; renderSim(ST.AGG); };
+    $('simModel').onchange = e => { ST.sim = s.id; ST.simM = +e.target.value; renderSim(ST.AGG); };
+  }
+
+  /* ============================================================
+   * 04 处方
+   * ============================================================ */
+  function renderRx(A) {
+    const rx = ST.RX || [];
+    const total = rx.reduce((a, f) => a + (f.est || 0), 0);
+    const highN = rx.filter(f => f.level === 'high').length;
+    const rc = $('rxCount');
+    if (rc) rc.textContent = rx.length;
+    const rs = $('rxSummary');
+    if (rs) {
+      rs.innerHTML = `可省上限 <b style="color:var(--teal)">¥${total.toFixed(2)}</b>` +
+        `（占本期 ${F.pct(total / Math.max(0.01, A.T.yuan))}）· ${highN} 条高优先`;
+    }
+    $('rxList').innerHTML = rx.map(f => `
+      <div class="rxcard ${f.level}">
+        <div class="rxh">
+          <h4>${esc(f.title)} <span class="badge ${f.level === 'high' ? 'r' : f.level === 'mid' ? 'a' : f.level === 'low' ? '' : 'v'}">${esc(f.tag)}</span></h4>
+          ${f.est > 0.005 ? `<div class="amt">可省 ¥${f.est.toFixed(2)}</div>` : ''}
+        </div>
+        <div class="rxp">${f.detail}</div>
+        ${f.evidence && f.evidence.length ? `<div class="rxev">${f.evidence.map(e => `<span>${esc(e.t)} <b>${esc(e.v)}</b></span>`).join('')}</div>` : ''}
+        <div class="rxa"><b>怎么做 · </b>${f.action}</div>
+      </div>`).join('') || '<div class="empty">没有发现明显浪费，这份账单挺健康</div>';
+
+    $('rxList').insertAdjacentHTML('beforeend', `
+      <div class="foot" style="margin-top:6px">
+        以上可省金额合计 <b style="color:var(--teal)">¥${total.toFixed(2)}</b>，约占本期 ${F.pct(total / Math.max(0.01, A.T.yuan))}。
+        <b>这是粗估上限，不是承诺</b>：规则之间有重叠（例如模型下沉与重复读取可能作用在同一批请求上），且假设替换后质量不下降。
+      </div>`);
+  }
+
+  /* ============================================================
+   * 05 账本
+   * ============================================================ */
+  const COLS = [
+    { k: 'title', t: '会话', l: 1 },
+    { k: 'arch', t: '原型' },
+    { k: 'yuan', t: '花费' },
+    { k: 'reqs', t: '请求' },
+    { k: 'chars', t: '产出字' },
+    { k: 'perK', t: '¥/千字' },
+    { k: 'dshare', t: 'D/E/H' },
+    { k: 'value', t: '价值' },
+    { k: 'fails', t: '失败' },
+  ];
+
+  function renderLedger(A) {
+    const key = ST.sortKey, dir = ST.sortDir;
+    const rows = A.sess.slice().sort((a, b) => {
+      let va, vb;
+      if (key === 'dshare') { va = a.D; vb = b.D; }
+      else if (key === 'perK') { va = a.perK == null ? Infinity : a.perK; vb = b.perK == null ? Infinity : b.perK; }
+      else { va = a[key]; vb = b[key]; }
+      if (va == null) va = -Infinity;
+      if (vb == null) vb = -Infinity;
+      return (va > vb ? 1 : va < vb ? -1 : 0) * (dir === -1 ? -1 : 1);
+    });
+    const head = COLS.map(c => `<th class="${c.l ? 'l' : ''}" data-k="${c.k}">${c.t}${key === c.k ? (dir === -1 ? ' ↓' : ' ↑') : ''}</th>`).join('');
+    const body = rows.map(s => `
+      <tr class="row" data-sid="${esc(s.id)}">
+        <td class="name" title="${esc(s.title)}">${esc(s.title)}</td>
+        <td><span class="tagline ${s.arch === '多智能体编排' ? 'vi' : s.arch === '批量生产' ? 'cool' : s.arch === '精修迭代' ? 'mid' : ''}">${esc(s.arch)}</span></td>
+        <td>¥${s.yuan.toFixed(2)}</td>
+        <td>${F.int(s.reqs)}</td>
+        <td>${F.num(s.chars)}</td>
+        <td>${s.perK == null ? '—' : s.perK.toFixed(3)}</td>
+        <td style="color:var(--t3)">${s.D.toFixed(0)}/${s.E.toFixed(0)}/${s.H.toFixed(0)}</td>
+        <td><b style="color:${s.value > 70 ? 'var(--teal)' : s.value < 55 ? 'var(--rose)' : 'var(--t1)'}">${s.value.toFixed(1)}</b></td>
+        <td style="color:${s.fails > 5 ? 'var(--rose)' : 'var(--t3)'}">${s.fails}</td>
+      </tr>`).join('');
+
+    $('ledgerCard').innerHTML = `
+      <div class="sec" style="margin:0 0 8px">
+        <h2 style="font-size:12.5px">${rows.length} 个会话</h2>
+        <span class="note">点表头排序，点行看证据</span>
+      </div>
+      <div class="tbl-wrap"><table id="ledgerTbl"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+
+    $('ledgerTbl').querySelectorAll('th').forEach(th => {
+      th.onclick = () => {
+        const k = th.dataset.k;
+        if (ST.sortKey === k) ST.sortDir *= -1; else { ST.sortKey = k; ST.sortDir = -1; }
+        renderLedger(A);
+      };
+    });
+    $('ledgerTbl').querySelectorAll('tr.row').forEach(tr => {
+      tr.onclick = () => {
+        const s = A.sess.find(x => x.id === tr.dataset.sid);
+        if (s) openDrawer(s);
+      };
+    });
+  }
+
+  /* ============================================================
+   * 抽屉：会话证据链
+   * ============================================================ */
+  function openDrawer(s) {
+    const A = ST.AGG;
+    const dim = (label, v, na, color) => `
+      <div class="dim"><span>${label}${na ? ' <em style="font-style:normal;color:var(--t4)">N/A</em>' : ''}</span>
+        <div class="tr"><i style="width:${na ? 55 : v}%;background:${color}"></i></div><b>${na ? '中性' : v.toFixed(0)}</b></div>`;
+
+    const models = s.modelShare.map(ms => {
+      const col = modelColor(ms.m);
+      const share = s.reqs ? ms.n / s.reqs : 0;
+      return `<div class="it"><span><i style="display:inline-block;width:7px;height:7px;border-radius:2px;background:${col};margin-right:6px"></i>${esc(A.RAW.models[ms.m])}</span>
+        <span>${ms.n} 次 · ¥${(ms.credit * SL.CREDIT_PRICE).toFixed(2)} · ${F.pct(share, 0)}</span></div>`;
+    }).join('');
+
+    const tools = Object.entries(s.toolCount).sort((a, b) => b[1] - a[1]).slice(0, 8)
+      .map(([k, v]) => `<span>${esc(k)} <b>${v}</b></span>`).join('');
+
+    const newFiles = s.filesNew.slice(0, 12).map(f => `<div class="it"><span>＋ ${esc(f)}</span><span>新建</span></div>`).join('') || '<div class="it"><span style="color:var(--t4)">没有新建文件</span><span></span></div>';
+    const editTop = [...s.fileEdits.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8)
+      .map(([f, c]) => `<div class="it"><span>${esc(f)}</span><span>${c} 次编辑</span></div>`).join('') || '<div class="it"><span style="color:var(--t4)">没有编辑记录</span><span></span></div>';
+
+    const cf = SL.counterfactualSelective(s, A.pricing, (s.domModel + 1) % A.pricing.length);
+
+    $('drawer').innerHTML = `
+      <button class="x" id="drawerX">✕</button>
+      <div class="badge ${s.arch === '多智能体编排' ? 'v' : 't'}" style="margin-bottom:10px">${esc(s.arch)}</div>
+      <h3>${esc(s.title)}</h3>
+      <div style="font-size:11px;color:var(--t3);margin-top:7px">
+        ${F.dateTime(s.st)} → ${F.dateTime(s.en)} · 跨 ${F.dur(s.durMin)} · ${s.turns} 轮对话
+      </div>
+
+      <div class="dstat">
+        <div><div class="k">花费</div><div class="v" style="color:var(--teal)">¥${s.yuan.toFixed(2)}</div></div>
+        <div><div class="k">请求</div><div class="v">${F.int(s.reqs)}</div></div>
+        <div><div class="k">产出</div><div class="v">${F.num(s.chars)} 字</div></div>
+        <div><div class="k">¥/千字</div><div class="v">${s.perK == null ? '—' : s.perK.toFixed(3)}</div></div>
+        <div><div class="k">每轮输入</div><div class="v">${F.num(s.avgIn)}</div></div>
+        <div><div class="k">缓存命中</div><div class="v">${F.pct(s.in ? s.hit / s.in : 0, 0)}</div></div>
+      </div>
+
+      <div class="dims">
+        ${dim('交付力 D', s.D, s.dNa, CH.cssVar('--teal'))}
+        ${dim('效率 E', s.E, s.eNa, CH.cssVar('--cyan'))}
+        ${dim('健康 H', s.H, false, CH.cssVar('--violet'))}
+      </div>
+
+      <div class="note" style="margin:14px 0 5px">模型构成</div>
+      <div class="dlist">${models}</div>
+
+      <div class="note" style="margin:14px 0 5px">动作构成（共 ${s.calls} 次工具调用）</div>
+      <div class="rxev">${tools || '<span>无</span>'}</div>
+
+      <div class="note" style="margin:14px 0 5px">产出证据 · 新建 ${s.filesNew.length} 个文件</div>
+      <div class="dlist">${newFiles}</div>
+
+      <div class="note" style="margin:14px 0 5px">改动最频繁的文件</div>
+      <div class="dlist">${editTop}</div>
+
+      <div class="note" style="margin:14px 0 5px">浪费证据</div>
+      <div class="dlist">
+        <div class="it"><span>失败工具调用</span><span>${s.fails} 次 · ¥${(s.failCredit * SL.CREDIT_PRICE).toFixed(2)}</span></div>
+        <div class="it"><span>重复读取</span><span>${s.dupReads} 次${s.worstRead ? ' · 《' + esc(s.worstRead) + '》' + s.worstReadN + ' 次' : ''}</span></div>
+        <div class="it"><span>子代理</span><span>${s.agentsN} 个 · ¥${(s.subCredit * SL.CREDIT_PRICE).toFixed(2)}</span></div>
+      </div>
+
+      ${cf ? `<div class="rxa" style="margin-top:16px">
+        <b>换模型算账 · </b>若把低判断力请求下沉到 ${esc(cf.name)}，这个会话预计 ¥${cf.yuan.toFixed(2)}
+        （${cf.deltaYuan <= 0 ? '省' : '多花'} ¥${Math.abs(cf.deltaYuan).toFixed(2)}，换 ${cf.switched} 条请求）。
+      </div>` : ''}
+
+      <div style="margin-top:20px"><button class="btn" id="drawerSim">用这个会话做反事实模拟 →</button></div>`;
+
+    $('drawerBg').classList.add('on');
+    $('drawer').classList.add('on');
+    $('drawerX').onclick = closeDrawer;
+    $('drawerSim').onclick = () => {
+      ST.sim = s.id;
+      renderSim(A);
+      closeDrawer();
+      $('simCard').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    };
+  }
+  function closeDrawer() {
+    $('drawerBg').classList.remove('on');
+    $('drawer').classList.remove('on');
+  }
+
+  /* ============================================================
+   * 06 方法论
+   * ============================================================ */
+  function renderMethod(A) {
+    const T = A.T;
+    const cb = costBase(T);
+    // 分模型反向：谁比官方价还贵、谁才是省下的主要贡献者
+    const obm = T.officialByModel || [];
+    const negs = obm.filter(x => x.delta != null && x.delta < -0.01);
+    const poss = obm.filter(x => x.delta != null && x.delta > 0.01);
+    let reversalTxt = '';
+    if (negs.length) {
+      const w = negs[0], b = poss[poss.length - 1];
+      reversalTxt = `；分模型看常有反转 —— ${w.name} 反而比官方价多花 ¥${Math.abs(w.delta).toFixed(2)}` +
+        (b ? `，${b.name} 省了 ¥${b.delta.toFixed(2)}` : '');
+    } else if (poss.length) {
+      const b = poss[poss.length - 1];
+      reversalTxt = `；其中 ${b.name} 贡献最大，省了 ¥${b.delta.toFixed(2)}`;
+    }
+    $('methodCard').innerHTML = `
+      <div class="two">
+        <div>
+          <div class="note" style="margin-bottom:8px">价值评分</div>
+          <div class="formula">价值分 V = <b>wD·D</b> + <b>wE·E</b> + <b>wH·H</b>   （权重可调，默认 45/35/20）
+
+D 交付力 = 100·log10(1+产出字符) / log10(1+本批最大产出)
+           └ 有 present_files 交付 +6，无落盘产出则按检索覆盖计分（上限 42）
+
+E 效率   = 60·√(本批中位单位成本 ÷ 本会话单位成本)   → 中位数得 60 分
+           └ 无落盘产出时不可比，取中性分 55 并标 N/A
+
+H 健康   = 100 − 45·min(1, 失败率/15%) − 30·min(1, 重复读占比/50%) − 25·min(1, 每轮输入/12万)</div>
+          <div class="foot">
+            产出字符 = 所有 Write 的 content 长度 + 所有 Edit 的 new_string 长度，即「真正写出来的新内容」。
+            没有设「规模」这一维，因为它和 D 高度相关，重复计权会让大任务天然占优。
+            成本不进入价值分，而是作为分母独立呈现为「字/元」。
+          </div>
+        </div>
+        <div>
+          <div class="note" style="margin-bottom:8px">单价反解</div>
+          <div class="formula">对每个模型解一个三元一次方程组：
+
+credit ≈ pm·(未命中输入/1e6) + ph·(缓存命中/1e6) + po·(输出/1e6)
+
+pm/ph/po 用普通最小二乘求解，报告 R²。
+若任一系数 ≤ 0（常见于 token 结构单一导致共线），
+判定拟合不可靠，回退到该模型官方牌价并标注来源。</div>
+          <div class="note" style="margin:16px 0 8px">已知偏差</div>
+          <div class="dlist">
+            <div class="it"><span>会话标题</span><span>取 AI 标题，缺失时取首条用户消息前 60 字</span></div>
+            <div class="it"><span>子代理归属</span><span>subagents/*.jsonl 的费用归入父会话</span></div>
+            <div class="it"><span>失败成本</span><span>用 callId 关联请求，仅统计能对上的失败</span></div>
+            <div class="it"><span>信用点数</span><span>credit 四舍五入到 0.01，小请求噪声较大</span></div>
+            <div class="it"><span>反事实</span><span>假设 token 结构不变，实际换模型后缓存行为会变</span></div>
+            <div class="it"><span>跨会话比较</span><span>存在混杂：贵模型可能只是用在了更难的活上</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="note" style="margin:20px 0 8px">数据口径</div>
+      <div class="kvs two">
+        <div>
+          <div class="kv"><span>数据源</span><span>~/.workbuddy/projects/**/*.jsonl</span></div>
+          <div class="kv"><span>请求级记录</span><span>providerData.rawUsage.total_tokens 非空</span></div>
+          <div class="kv"><span>本次统计请求</span><span>${F.int(T.reqs)} 条</span></div>
+          <div class="kv"><span>统计窗口</span><span>${Math.round(T.days)} 天 · 月均 ${F.int(T.perMonthCredit)} 积分</span></div>
+          <div class="kv"><span>金额换算</span><span>1 积分 ≈ ¥${SL.CREDIT_PRICE.toFixed(4)}${ST.plan === 'credit' ? '（牌价）' : '（套餐折算）'}</span></div>
+        </div>
+        <div>
+          <div class="kv"><span>总 token</span><span>${F.int(T.in + T.out)}</span></div>
+          <div class="kv"><span>输入 / 输出</span><span>${F.num(T.in)} / ${F.num(T.out)}</span></div>
+          <div class="kv"><span>缓存命中</span><span>${F.num(T.hit)}（${F.pct(T.cacheRate)}）</span></div>
+          <div class="kv"><span>官方 API 等价</span><span>${F.yuan(T.official)}（覆盖 ${F.pct(T.officialCover, 1)} 积分）</span></div>
+          <div class="kv"><span>WorkBuddy 省下</span><span>${T.saveYuan >= 0 ? '' : '−'}${F.yuan(Math.abs(T.saveYuan))}（${F.pct(Math.abs(T.savePct), 1)}）</span></div>
+        </div>
+      </div>
+      <div class="foot" style="margin-top:12px;line-height:1.9">
+        <b>计费口径：</b>${ST.plan === 'credit'
+          ? '按积分牌价 ¥0.0500/积分（未绑定套餐，适合对比或未订阅时使用）'
+          : `按「${(SL.planQuote(ST.plan, ST.cycle) || {}).label || ''}」折算 ¥${SL.CREDIT_PRICE.toFixed(4)}/积分`}。
+        切换口径只改变所有「¥」的换算，不改变积分与 token 的原始记录，也不影响任何排名结论。<br>
+        <b>三个「省」不是同一件事，别混：</b><br>
+        ① <b>缓存替你挡下</b> = 假设没有缓存、按同一套单价重算，你要多付多少（规模最大，但它是「避免的损失」，不是账面减免）。<br>
+        ② <b>WorkBuddy 省下</b> = 官方牌价等价 − ${cb.label}（${F.yuan(cb.cost)}），<b>已经发生</b>的价差${reversalTxt}。<br>
+        ③ <b>可省上限</b> = 本报告建议的优化空间（<b>还没发生</b>），见「省钱关键点」页签。<br>
+        <b>为什么用「期间实付」而不是「已用积分 × 单价」：</b>
+        订阅是固定支出，没用的额度也已经付过钱了。若按「已用积分 × 单价」分摊，
+        浪费掉的额度会被算成 0 成本，结果是<b>套餐买得越贵、账面越显得划算</b>——
+        这正是最容易骗到自己的算法，所以不用它。
+      </div>`;
+  }
+
+  function renderFoot(A) {
+    $('footNote').innerHTML = `
+      workbuddy-spendLens · 我帮你省钱 &nbsp;|&nbsp; 数据快照 ${new Date().toLocaleString('zh-CN')} &nbsp;|&nbsp;
+      ${A.RAW.files} 个日志文件 / ${F.num(A.RAW.lineCount)} 行 / ${F.num(A.RAW.bytes)} 字符 &nbsp;|&nbsp;
+      ${ST.demo ? '<b>当前为脱敏演示数据</b>：项目名、会话标题、文件名均已替换，数值与结构为真实分布' : '本页不上传任何数据，关闭页面即销毁内存中的数据'}
+      <br>金额按 1 积分 ≈ ¥${SL.CREDIT_PRICE.toFixed(4)} 折算${ST.plan === 'credit' ? '（积分牌价）' : `（${(SL.planQuote(ST.plan, ST.cycle) || {}).label || '套餐'} 折算）`}；所有模型比较结论只依赖积分，不受汇率与套餐价差影响。`;
+  }
+
+  /* ============================================================
+   * 总渲染
+   * ============================================================ */
+  function renderAll() {
+    if (!ST.RAW) return;
+    recompute();
+    const A = ST.AGG;
+    renderTop();
+    renderHero(A);
+    renderKpis(A);
+    renderInsights(A);
+    renderCost(A);
+    renderSankey(A);
+    renderProjects(A);
+    renderMap(A);
+    renderRank(A);
+    renderPrice(A);
+    renderAdvice(A);
+    renderSim(A);
+    renderRx(A);
+    renderLedger(A);
+    renderMethod(A);
+    renderFoot(A);
+  }
+
+  function renderChartsOnly() {
+    if (!ST.AGG) return;
+    // 只重绘当前可见面板里的图表，隐藏面板切过去时再画
+    const fn = TAB_CHARTS[ST.tab];
+    if (fn) fn(ST.AGG);
+    renderHeat(ST.AGG); renderDaily(ST.AGG);   // 首屏两张图按宽度绘制，需跟随窗口
+  }
+
+  /* ============================================================
+   * 事件绑定
+   * ============================================================ */
+  function bindGlobal() {
+    $('winSeg').addEventListener('click', e => {
+      const b = e.target.closest('.pill');
+      if (!b) return;
+      [...$('winSeg').children].forEach(x => x.classList.remove('on'));
+      b.classList.add('on');
+      ST.win = b.dataset.w;
+      renderAll();
+    });
+    $('wsSel').onchange = e => { ST.ws = e.target.value; renderAll(); };
+    $('modelSel').onchange = e => { ST.model = e.target.value; renderAll(); };
+    const psel = $('planSel');
+    if (psel) psel.onchange = e => {
+      const v = e.target.value;
+      if (v === 'credit') {
+        ST.plan = 'credit';
+        SL.setCreditPrice(0.05);
+      } else {
+        const parts = v.split(':');
+        ST.plan = parts[0]; ST.cycle = parts[1] || 'm';
+        const q = SL.planQuote(ST.plan, ST.cycle);
+        SL.setCreditPrice(q ? q.unit : 0.05);
+      }
+      try { localStorage.setItem('sl.plan', v); } catch (err) {}
+      renderAll();
+      const q2 = ST.plan === 'credit' ? null : SL.planQuote(ST.plan, ST.cycle);
+      toast(q2 ? `已按「${q2.label}」折算：¥${q2.unit.toFixed(4)}/积分` : '已切换为积分牌价 ¥0.05/积分');
+    };
+    $('themeBtn').onclick = () => {
+      const light = document.body.classList.toggle('light');
+      $('themeBtn').textContent = light ? '◑' : '◐';
+      try { localStorage.setItem('sl.theme', light ? 'light' : 'dark'); } catch (e) {}
+      renderChartsOnly();
+    };
+    $('drawerBg').onclick = closeDrawer;
+    $('tabBar').addEventListener('click', e => {
+      const b = e.target.closest('.tab');
+      if (b && b.dataset.tab) switchTab(b.dataset.tab);
+    });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+    let rt;
+    window.addEventListener('resize', () => {
+      clearTimeout(rt);
+      rt = setTimeout(renderChartsOnly, 180);
+    });
+  }
+
+  function initTheme() {
+    let t = 'dark';
+    try {
+      // 支持 ?theme=light|dark 强制指定（截图 / 分享用）
+      const q = (location.search.match(/[?&]theme=(light|dark)/) || [])[1];
+      t = q || localStorage.getItem('sl.theme') || 'dark';
+    } catch (e) {}
+    if (t === 'light') { document.body.classList.add('light'); $('themeBtn').textContent = '◑'; }
+    try {
+      const w = localStorage.getItem('sl.w');
+      if (w) { const o = JSON.parse(w); if (o && o.d != null) ST.W = o; }
+    } catch (e) {}
+    // 恢复上次的计费口径（套餐单价必须在首次渲染前就位）
+    try {
+      const qp = (location.search.match(/[?&]plan=([a-z]+:[a-z0-9]+|credit)/) || [])[1];
+      const pv = qp || localStorage.getItem('sl.plan');
+      if (pv === 'credit') { ST.plan = 'credit'; SL.setCreditPrice(0.05); }
+      else if (pv) {
+        const parts = pv.split(':');
+        const q = SL.planQuote(parts[0], parts[1] || 'm');
+        if (q) { ST.plan = parts[0]; ST.cycle = parts[1] || 'm'; SL.setCreditPrice(q.unit); }
+      } else {
+        // 首次使用：落到推荐档（标准版·连续包年），顶部下拉可换成实际套餐
+        const q = SL.planQuote('std', 'y');
+        if (q) { ST.plan = 'std'; ST.cycle = 'y'; SL.setCreditPrice(q.unit); ST._defaultPlan = true; }
+      }
+    } catch (e) {}
+  }
+
+  root.SLUI = {
+    ST, renderAll, bindGlobal, initTheme, toast, recompute, switchTab,
+    setData(RAW, demo) {
+      ST.RAW = RAW; ST.demo = !!demo;
+      ST.ws = ''; ST.model = ''; ST.sim = null; ST.simM = null;
+      renderAll();
+      if (ST._defaultPlan) {
+        ST._defaultPlan = false;
+        const q = SL.planQuote(ST.plan, ST.cycle);
+        if (q) toast(`已按「${q.label}」折算 ¥${q.unit.toFixed(4)}/积分 —— 顶部下拉可换成你的实际套餐`);
+      }
+    },
+  };
+})(window);
+</script>
+<script>/* ============================================================
+   SpendLens Boot — 本地数据接入
+   三条路径：目录句柄（可自动复用）/ 拖拽 · 选文件夹 / 上次快照
+   ============================================================ */
+;(function (root) {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const F = root.FMT;
+
+  let dirHandle = null;
+  let snapshot = null;
+
+  /* ---------------- IndexedDB ---------------- */
+  const DB = 'spendlens', STORE = 'kv';
+  const withTimeout = (p, ms) => Promise.race([
+    p,
+    new Promise((_, rej) => setTimeout(() => rej(new Error('idb timeout')), ms)),
+  ]);
+  function idb() {
+    return withTimeout(new Promise((res, rej) => {
+      const r = indexedDB.open(DB, 1);
+      r.onupgradeneeded = () => { if (!r.result.objectStoreNames.contains(STORE)) r.result.createObjectStore(STORE); };
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => rej(r.error);
+      r.onblocked = () => rej(new Error('idb blocked'));
+    }), 1500);
+  }
+  async function idbGet(k) {
+    try {
+      const db = await idb();
+      return await withTimeout(new Promise((res, rej) => {
+        const t = db.transaction(STORE, 'readonly').objectStore(STORE).get(k);
+        t.onsuccess = () => res(t.result);
+        t.onerror = () => rej(t.error);
+      }), 1500);
+    } catch (e) { return null; }
+  }
+  async function idbSet(k, v) {
+    try {
+      const db = await idb();
+      await withTimeout(new Promise((res, rej) => {
+        const tx = db.transaction(STORE, 'readwrite');
+        tx.objectStore(STORE).put(v, k);
+        tx.oncomplete = res; tx.onerror = () => rej(tx.error);
+      }), 4000);
+      return true;
+    } catch (e) { return false; }
+  }
+
+  /* ---------------- 路径归一 ---------------- */
+  function normalizePath(p) {
+    const parts = String(p).split('/').filter(Boolean);
+    const i = parts.lastIndexOf('projects');
+    let out = i >= 0 ? parts.slice(i + 1) : parts;
+    if (out.length === 1) out = ['导入', out[0]];
+    return out.join('/');
+  }
+
+  /* ---------------- 从目录句柄读取 ---------------- */
+  async function walk(dir, prefix, out) {
+    for await (const [name, h] of dir.entries()) {
+      if (h.kind === 'directory') {
+        await walk(h, prefix + name + '/', out);
+      } else if (/\.jsonl$/i.test(name)) {
+        out.push({ path: prefix + name, handle: h });
+      }
+    }
+  }
+
+  async function readFromHandle(handle, onStep) {
+    const list = [];
+    await walk(handle, handle.name + '/', list);
+    const out = [];
+    for (let i = 0; i < list.length; i++) {
+      const f = await list[i].handle.getFile();
+      out.push({ path: normalizePath(list[i].path), text: await f.text() });
+      if (onStep && i % 8 === 0) onStep(i + 1, list.length);
+    }
+    return out;
+  }
+
+  /* ---------------- 进度 ---------------- */
+  function progress(show, pct, label) {
+    const el = document.querySelector('.progress');
+    if (!el) return;
+    el.classList.toggle('on', !!show);
+    if (pct != null) el.firstElementChild.style.width = Math.min(100, pct) + '%';
+    if (label) {
+      const l = document.getElementById('progLabel');
+      if (l) l.textContent = label;
+    }
+  }
+
+  /* ---------------- 主流程 ---------------- */
+  async function ingest(files, opts) {
+    opts = opts || {};
+    if (!files.length) {
+      err('没有找到 .jsonl 日志文件。请选择 ~/.workbuddy/projects 目录（或它下面的子目录）。');
+      return;
+    }
+    progress(true, 6, `已读取 ${files.length} 个文件，正在解析…`);
+    await new Promise(r => setTimeout(r, 30));
+
+    let RAW;
+    try {
+      RAW = root.SL.parseLogs(files);
+    } catch (e) {
+      console.error(e);
+      err('解析失败：' + e.message);
+      progress(false);
+      return;
+    }
+    if (!RAW.sessions.length) {
+      err('文件读到了，但没有找到任何带 usage 的请求记录。可能选的目录不对，或日志格式有变化。');
+      progress(false);
+      return;
+    }
+    progress(true, 70, `解析出 ${RAW.sessions.length} 个会话，正在建立快照…`);
+    await new Promise(r => setTimeout(r, 20));
+
+    // 存快照（失败不阻塞）
+    try {
+      const J = root.SL.serializeRAW(RAW);
+      snapshot = { ts: Date.now(), data: J };
+      await idbSet('snap', snapshot);
+    } catch (e) { /* 忽略 */ }
+
+    progress(true, 100, '完成');
+    root.SLUI.setData(RAW, opts.demo);
+    hideGate();
+    setTimeout(() => progress(false), 400);
+    if (opts.toast) root.SLUI.toast(opts.toast);
+  }
+
+  function err(msg) {
+    const e = document.getElementById('gateErr');
+    if (e) e.textContent = msg;
+    else root.SLUI.toast(msg);
+  }
+
+  function hideGate() {
+    const g = $('gate');
+    g.classList.add('off');
+    setTimeout(() => { g.style.display = 'none'; }, 400);
+  }
+  function showGate() {
+    const g = $('gate');
+    g.style.display = 'flex';
+    requestAnimationFrame(() => g.classList.remove('off'));
+  }
+
+  /* ---------------- 目录直连 ---------------- */
+  async function pickDir() {
+    if (!window.showDirectoryPicker) {
+      err('这个浏览器不支持目录直连（需要 Chrome/Edge 111+，且页面需在 http(s) 或本地服务下打开）。请用右侧的「拖入或选择文件夹」。');
+      return false;
+    }
+    try {
+      dirHandle = await window.showDirectoryPicker({ id: 'wb-projects', mode: 'read' });
+    } catch (e) {
+      if (e && e.name === 'AbortError') return false;
+      err('目录授权被拒绝：' + (e && e.message ? e.message : e) + '。可以改用「拖入或选择文件夹」。');
+      return false;
+    }
+    await idbSet('handle', dirHandle);
+    progress(true, 2, '正在遍历目录…');
+    const files = await readFromHandle(dirHandle, (i, n) => progress(true, 2 + i / n * 60, `读取日志 ${i}/${n}`));
+    await ingest(files, { toast: `已接入 ${files.length} 个日志文件` });
+    return true;
+  }
+
+  async function rescan() {
+    if (dirHandle) {
+      try {
+        const p = await dirHandle.queryPermission({ mode: 'read' });
+        if (p === 'granted' || p === 'prompt') {
+          const r = await dirHandle.requestPermission({ mode: 'read' });
+          if (r === 'granted') {
+            root.SLUI.toast('正在重新扫描…');
+            const files = await readFromHandle(dirHandle);
+            await ingest(files, { toast: '已更新到最新' });
+            return;
+          }
+        }
+      } catch (e) { /* fallthrough */ }
+    }
+    // 没有句柄 → 走选目录 / 选文件
+    if (window.showDirectoryPicker) {
+      await pickDir();
+    } else {
+      pickFiles();
+    }
+  }
+
+  /* ---------------- 文件 / 文件夹选择 ---------------- */
+  function pickFiles() {
+    const inp = document.createElement('input');
+    inp.type = 'file';
+    inp.multiple = true;
+    inp.webkitdirectory = true;
+    inp.accept = '.jsonl';
+    inp.onchange = async () => {
+      const fs = [...inp.files].filter(f => /\.jsonl$/i.test(f.name));
+      if (!fs.length) { err('选中的文件夹里没有 .jsonl 文件。'); return; }
+      progress(true, 4, `读取 ${fs.length} 个文件…`);
+      const out = [];
+      for (let i = 0; i < fs.length; i++) {
+        const f = fs[i];
+        out.push({ path: normalizePath(f.webkitRelativePath || f.name), text: await f.text() });
+        if (i % 8 === 0) progress(true, 4 + i / fs.length * 60, `读取日志 ${i + 1}/${fs.length}`);
+      }
+      await ingest(out, { toast: `已接入 ${out.length} 个日志文件` });
+    };
+    inp.click();
+  }
+
+  /* ---------------- 拖拽 ---------------- */
+  async function fromDrop(dt) {
+    const items = [...(dt.items || [])];
+    const entries = items.map(it => it.webkitGetAsEntry && it.webkitGetAsEntry()).filter(Boolean);
+    if (!entries.length) {
+      const fs = [...(dt.files || [])].filter(f => /\.jsonl$/i.test(f.name));
+      const out = [];
+      for (const f of fs) out.push({ path: normalizePath(f.name), text: await f.text() });
+      await ingest(out, { toast: `已接入 ${out.length} 个日志文件` });
+      return;
+    }
+    progress(true, 3, '正在读取拖入的目录…');
+    const out = [];
+    async function readEntry(entry, prefix) {
+      if (entry.isFile) {
+        if (!/\.jsonl$/i.test(entry.name)) return;
+        const file = await new Promise((res, rej) => entry.file(res, rej));
+        out.push({ path: normalizePath(prefix + entry.name), text: await file.text() });
+        if (out.length % 8 === 0) progress(true, 3 + Math.min(60, out.length), `已读取 ${out.length} 个文件`);
+      } else if (entry.isDirectory) {
+        const rd = entry.createReader();
+        let batch;
+        do {
+          batch = await new Promise((res, rej) => rd.readEntries(res, rej));
+          for (const e of batch) await readEntry(e, prefix + entry.name + '/');
+        } while (batch.length);
+      }
+    }
+    for (const e of entries) await readEntry(e, '');
+    if (!out.length) { err('拖入的内容里没有 .jsonl 文件。'); progress(false); return; }
+    await ingest(out, { toast: `已接入 ${out.length} 个日志文件` });
+  }
+
+  /* ---------------- 门槛页 ---------------- */
+  function renderGate(hasSnap) {
+    const fsa = !!window.showDirectoryPicker;
+    const ico = {
+      dir: '<path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+      file: '<path d="M12 3v11m0 0l-4-4m4 4l4-4M4 18v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2"/>',
+      snap: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5.5l3.5 2"/>',
+    };
+    const svgi = p => `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+
+    $('gateIn').innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:center;gap:11px;margin-bottom:26px">
+        <div class="logo" style="width:34px;height:34px;border-radius:10px;font-size:15px">¥</div>
+        <div style="text-align:left">
+          <div style="font-size:14px;font-weight:660;letter-spacing:-.01em">workbuddy-spendLens<span style="color:var(--t3);font-weight:400;font-size:11px;letter-spacing:.14em;margin-left:7px">我帮你省钱</span></div>
+          <div style="font-size:10px;color:var(--t4);letter-spacing:.16em;margin-top:1px">WORKBUDDY · 1024 造物挑战</div>
+        </div>
+      </div>
+      <h2>你的 AI 账单<br><em>七成花在重复朗读</em></h2>
+      <p>把 WorkBuddy 的本地用量日志读进来，算清每一分积分花在<b>哪个项目</b>、<b>哪类任务</b>、<b>哪个模型</b>上，并给出下次该用哪个模型的建议。</p>
+      <p style="font-size:11.5px;color:var(--t4);margin-top:8px">本机实测：输入侧占账单 74%，输出只占 26% —— 钱主要买的是「让它反复读前文」。全部在浏览器内存里解析，不联网、不上传。</p>
+
+      <div class="opts">
+        <div class="opt" data-a="dir">
+          <div class="oi" style="color:var(--teal)">${svgi(ico.dir)}</div>
+          <h4>直连本机目录 ${fsa ? '<span class="rec">推荐</span>' : '<span class="rec" style="color:var(--amber);border-color:var(--amber)">不可用</span>'}</h4>
+          <p>选择 <span class="mono" style="font-size:10px">~/.workbuddy/projects</span>。授权后会把句柄存进浏览器，下次打开自动复用。</p>
+        </div>
+        <div class="opt" data-a="file">
+          <div class="oi" style="color:var(--cyan)">${svgi(ico.file)}</div>
+          <h4>拖入或选择文件夹</h4>
+          <p>把整个 projects 文件夹拖进窗口，或点这里选。任何浏览器都能用，无需授权。</p>
+        </div>
+        <div class="opt" data-a="snap" ${hasSnap ? '' : 'style="opacity:.45"'}>
+          <div class="oi" style="color:var(--violet)">${svgi(ico.snap)}</div>
+          <h4>载入上次快照</h4>
+          <p>${hasSnap ? `上次扫描：${new Date(hasSnap.ts).toLocaleString('zh-CN')}，点这里立即恢复，不用再选目录。` : '还没有快照，先接入一次数据。'}</p>
+        </div>
+      </div>
+      <div class="progress"><i></i></div>
+      <div class="err" id="gateErr"></div>
+      <div class="privacy">
+        支持的日志：<span class="mono">~/.workbuddy/projects/**/*.jsonl</span>（含 subagents 子目录）· 生成的是一张完全离线的单文件网页。<br>
+        目录直连依赖 File System Access API，需 Chrome / Edge 111+；若被浏览器拦下（部分环境禁止 file:// 页面调用），请用「拖入或选择文件夹」，效果完全一样。
+      </div>`;
+
+    $('gateIn').querySelectorAll('.opt').forEach(o => {
+      o.onclick = async () => {
+        const a = o.dataset.a;
+        if (a === 'dir') await pickDir();
+        else if (a === 'file') pickFiles();
+        else if (a === 'snap' && snapshot) {
+          progress(true, 40, '正在恢复快照…');
+          root.SLUI.setData(root.SL.deserializeRAW(snapshot.data), false);
+          hideGate();
+          progress(false);
+          root.SLUI.toast('已载入上次快照 · 点右上角「重扫」可更新');
+        }
+      };
+    });
+
+    // 拖拽
+    const g = $('gate');
+    ['dragenter', 'dragover'].forEach(t => g.addEventListener(t, e => {
+      e.preventDefault(); g.querySelector('.opts').classList.add('hot');
+    }));
+    ['dragleave', 'drop'].forEach(t => g.addEventListener(t, e => {
+      e.preventDefault(); g.querySelector('.opts').classList.remove('hot');
+    }));
+    g.addEventListener('drop', e => {
+      e.preventDefault();
+      if (e.dataTransfer) fromDrop(e.dataTransfer);
+    });
+  }
+
+  /* ---------------- 启动 ---------------- */
+  async function boot() {
+    root.SLUI.initTheme();
+    root.SLUI.bindGlobal();
+    $('rescanBtn').onclick = () => rescan();
+
+    // 1) 演示数据
+    if (window.__SPENDLENS_DEMO__) {
+      try {
+        const RAW = root.SL.deserializeRAW(window.__SPENDLENS_DEMO__);
+        root.SLUI.setData(RAW, true);
+        hideGate();
+        // 演示版是固定快照，隐藏「重扫」，避免用户以为能刷出自己机器上的数据
+        const rb = $('rescanBtn');
+        if (rb) { rb.style.display = 'none'; }
+        const ws = $('wsSel'), ms = $('modelSel');
+        if (ws) ws.style.display = '';
+        return;
+      } catch (e) {
+        console.error('演示数据载入失败', e);
+      }
+    }
+
+    // 2) 先立刻把门槛页画出来，绝不让用户看到白屏
+    renderGate(null);
+
+    // 3) 再异步探测上次快照与目录句柄
+    const snap = await idbGet('snap');
+    snapshot = snap || null;
+    const h = await idbGet('handle');
+    if (h) {
+      dirHandle = h;
+      try {
+        const p = await h.queryPermission({ mode: 'read' });
+        if (p === 'granted') {
+          progress(true, 4, '已获得上次的目录授权，正在自动读取…');
+          const files = await readFromHandle(h, (i, n) => progress(true, 4 + i / n * 60, `读取日志 ${i}/${n}`));
+          await ingest(files, { toast: '已自动读取本机最新日志' });
+          return;
+        }
+      } catch (e) { /* 忽略，走门槛页 */ }
+    }
+
+    // 4) 有快照就直接展示（打开即见数据）
+    if (snapshot && snapshot.data) {
+      root.SLUI.setData(root.SL.deserializeRAW(snapshot.data), false);
+      hideGate();
+      root.SLUI.toast('已载入上次快照 · 点「重扫」读取最新');
+      return;
+    }
+    // 5) 更新门槛页文案（此时才知道有没有快照）
+    renderGate(snapshot);
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+})(window);
+</script>
+</body>
+</html>
